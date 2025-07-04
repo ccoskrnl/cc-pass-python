@@ -1,0 +1,10 @@
+.venv
+.idea
+poetry.lock
+
+# 忽略所有 __pycache__ 文件夹
+__pycache__/
+# 忽略所有 .pyc、.pyo、.pyd 文件
+*.py[cod]
+# 忽略 PyCharm 生成的缓存文件
+*$py.class

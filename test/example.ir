@@ -1,0 +1,45 @@
+#    k = false;
+#    i = 1;
+#    j = 2;
+#    while ( i <= n)
+#    {
+#    	j = j * 2;
+#    	k = true;
+#		if (i <= 5)
+#		{
+#    	    i = i + 1;
+#	    }
+#    }
+#    if (k)
+#    {
+#    	printf(j);
+#    }
+#    else
+#    {
+#    	i += 1;
+#    }
+
+    entry
+    k := false
+    i := 1
+    j := 2
+L1:
+    cond1 := i <= n
+    if cond1 goto &L2
+    if k goto &L4
+    i := i + 1
+    goto &L5
+L2:
+    j := j * 2
+    k := true
+    cond2 := i <= 5
+    if cond2 goto &L3
+    goto &L1
+L3:
+    i := i + 1
+    goto &L1
+L4:
+    print j
+    goto &L5
+L5:
+    exit
