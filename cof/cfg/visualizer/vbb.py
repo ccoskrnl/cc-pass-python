@@ -1,6 +1,6 @@
 from random import randint
 
-from ..bb import BasicBlock, BasicBlockBranchType
+from ..bb import BasicBlock, BasicBlockBranchType, EdgeType
 import math
 
 from PyQt6.QtWidgets import QGraphicsTextItem, QGraphicsRectItem, QGraphicsItem, QMenu, QGraphicsScene, QGraphicsSimpleTextItem, \
@@ -53,6 +53,9 @@ class VisualBasicBlock(BasicBlock):
         self.succ_vbbs: list[VisualBasicBlock] = []
         self.pred_vbbs: list[VisualBasicBlock] = []
 
+        # A dict, key is vbb that be moved, value is corresponding edge.
+        self.edge_dict = { }
+
 class EdgeItem(QGraphicsPathItem):
 
     # green
@@ -73,25 +76,7 @@ class EdgeItem(QGraphicsPathItem):
         self.target: VisualBasicBlock = target
 
         self.color = None
-
-        # self.setPen(QPen(QColor(178, 34, 34), 2))
-        self.update_path()
-
-    def add_connection(self):
-
-        # the bottom middle position of the source
-        start_pos = QPointF(
-            self.source.x + self.source.width / 2,
-            self.source.y + self.source.height
-        )
-        # the top middle position of the target
-        end_pos = QPointF(
-            self.target.x + self.target.width / 2,
-            self.target.y
-        )
-
-
-    def update_path(self):
+        self.connection_type = EdgeType.tree
 
         match self.source.branch_type:
             case BasicBlockBranchType.jump:
@@ -107,76 +92,109 @@ class EdgeItem(QGraphicsPathItem):
 
         if self.source.rank == self.target.rank:
             self.color = EdgeItem.cross_edge_color
+            self.connection_type = EdgeType.cross
 
         self.setPen(QPen(self.color, 2))
+
+        # forward edge
+        if self.source.rank + 1 < self.target.rank:
+            self.connection_type = EdgeType.forward
+        # back edge
+        elif self.source.rank > self.target.rank:
+            self.connection_type = EdgeType.back
+
+        # self.setPen(QPen(QColor(178, 34, 34), 2))
+        self.update_path()
+
+    # def add_connection(self):
+    #
+    #     # the bottom middle position of the source
+    #     start_pos = QPointF(
+    #         self.source.x + self.source.width / 2,
+    #         self.source.y + self.source.height
+    #     )
+    #     # the top middle position of the target
+    #     end_pos = QPointF(
+    #         self.target.x + self.target.width / 2,
+    #         self.target.y
+    #     )
+
+
+    def update_path(self):
+
+
         arrow_base = None
 
-        edge_x_offset = self.source.edge_offset
-        edge_y_offset = self.source.edge_offset + 12
+        # 计算起点和终点位置
+        start_pos = QPointF(
+            self.source.x + self.source.width / 2,
+            self.source.y + self.source.height
+        )
+        start_pos_x: float = self.source.x + self.source.width / 2
+        start_pos_y: float = self.source.y + self.source.height
 
-        self.source.edge_offset += randint(8, 10)
+        end_pos = QPointF(
+            self.target.x + self.target.width / 2,
+            self.target.y
+        )
 
-        start_pos_x = self.source.x + self.source.width / 2 + edge_x_offset
-        start_pos_y = self.source.y + self.source.height
-        start_pos = QPointF(start_pos_x, start_pos_y)
-
-        first_anchor = QPointF(start_pos_x, start_pos_y + edge_y_offset)
+        end_pos_x: float = self.target.x + self.target.width / 2
+        end_pos_y: float = self.target.y
 
 
-        end_pos_x = self.target.x + self.target.width / 2 + edge_x_offset
-        end_pos_y = self.target.y
-        end_pos = QPointF(end_pos_x, end_pos_y)
 
-        last_anchor = QPointF(end_pos_x, end_pos_y - edge_y_offset)
-
-        # the middle control point
-        mid_x = (start_pos.x() + end_pos.x()) / 2
-        mid_y = (start_pos.y() + end_pos.y()) / 2
+        # 计算控制点
         ctrl_dist = min(150, abs(start_pos.y() - end_pos.y()) * 0.5)
 
-        # Create curve path
+
+        # 创建曲线路径
         path = QPainterPath()
         path.moveTo(start_pos)
 
-        # tree edge
-        if self.target.rank - self.source.rank == 1:
-            path.lineTo(first_anchor)
-            path.lineTo(end_pos_x, first_anchor.y())
-            path.lineTo(last_anchor)
-            path.lineTo(end_pos)
-            arrow_base = QPointF(last_anchor)
-            pass
-
-        # forward edge
-        elif self.source.rank < self.target.rank:
-            pass
-        # back edge
-        elif self.source.rank > self.target.rank:
-            control_offset = 120
+        if self.connection_type == EdgeType.tree:
+            ctrl1 = QPointF(start_pos_x, start_pos_y + ctrl_dist)
+            ctrl2 = QPointF(end_pos_x, end_pos_y - ctrl_dist)
+            path.cubicTo(ctrl1, ctrl2, end_pos)
+        elif self.connection_type == EdgeType.back:
+            control_offset = 300
             if start_pos_x < end_pos_x:
-                control1 = QPointF(start_pos_x + control_offset, start_pos_y + 60)
-                control2 = QPointF(end_pos_x - control_offset, end_pos_y - 60)
+                control1 = QPointF(start_pos_x + control_offset, start_pos_y + ctrl_dist)
+                control2 = QPointF(end_pos_x - control_offset, end_pos_y - ctrl_dist)
             else:
-                control1 = QPointF(start_pos_x - control_offset, start_pos_y + 60)
-                control2 = QPointF(end_pos_x + control_offset, end_pos_y - 60)
+                control1 = QPointF(start_pos_x - control_offset, start_pos_y + ctrl_dist)
+                control2 = QPointF(end_pos_x + control_offset, end_pos_y - ctrl_dist)
             path.cubicTo(control1, control2, end_pos)
             arrow_base = control2
-            pass
-        # cross edge
-        else:
-            pass
+        elif self.connection_type == EdgeType.forward:
 
-        # # adjust curve according to direction
-        # if end_pos.y() > start_pos.y():  # 向下流动
-        #     ctrl1 = QPointF(start_pos.x(), start_pos.y() + ctrl_dist)
-        #     ctrl2 = QPointF(end_pos.x(), end_pos.y() - ctrl_dist)
-        # else:  # upward
-        #     ctrl1 = QPointF(start_pos.x(), start_pos.y() - ctrl_dist)
-        #     ctrl2 = QPointF(end_pos.x(), end_pos.y() + ctrl_dist)
-        #
-        # path.cubicTo(ctrl1, ctrl2, end_pos)
+            offset_x = (end_pos_x - start_pos_x) * 0.3
+            offset_y = abs(end_pos_y - start_pos_y) * 0.5
 
-        # set path
+            path.cubicTo(
+                start_pos_x + offset_x, start_pos_y + offset_y,
+                end_pos_x - offset_x, end_pos_y - offset_y,
+                end_pos_x, end_pos_y
+            )
+        elif self.connection_type == EdgeType.back:
+            mid_x = (start_pos_x + end_pos_x) / 2
+            mid_y = (start_pos_y + end_pos_y) / 2
+
+            # 计算偏移量（避免重叠）
+            offset = 40
+
+            path.lineTo(start_pos_x, mid_x - offset)
+            path.lineTo(end_pos_x, mid_y - offset)
+
+            jump_radius = 15
+            path.arcTo(
+                end_pos_x - jump_radius,
+                mid_y - offset - jump_radius,
+                jump_radius * 2,
+                jump_radius * 2,
+                180, 180
+            )
+            path.lineTo(end_pos_x, end_pos_y)
+
         self.setPath(path)
 
         # set arrow
@@ -522,12 +540,15 @@ class BlockItem(QGraphicsItem):
         return gradient
 
     def update_connections(self):
-        scene: QGraphicsScene = self.scene()
-        if scene:
-            for item in scene.items():
-                if isinstance(item, EdgeItem) \
-                        and (item.source == self.block or item.target == self.block):
-                    item.update_path()
+        # exit edges
+        for edge_item in self.block.edge_dict.values():
+            edge_item.update_path()
+        # incident edge
+        for pred_vbb in self.block.pred_vbbs:
+            if self.block.id in pred_vbb.edge_dict:
+                incident_edge = pred_vbb.edge_dict[self.block.id]
+                incident_edge.update_path()
+
 
     def adjust_position_to_avoid_overlap(self):
         for item in self.collidingItems():
@@ -586,28 +607,33 @@ class BlockItem(QGraphicsItem):
 
     def mouseMoveEvent(self, event):
         if self.is_dragging:
-            old_pos = self.pos()
+            # old_pos = self.pos()
             # calculate distance
             delta = event.pos() - self.drag_start_position
             new_pos = self.pos() + delta
             self.setPos(new_pos)
 
-            colliding = False
-            for item in self.collidingItems():
-                if isinstance(item, BlockItem) and item != self:
-                    colliding = True
-                    break
+            self.block.x = new_pos.x()
+            self.block.y = new_pos.y()
+
+            self.update_connections()
+
+            # colliding = False
+            # for item in self.collidingItems():
+            #     if isinstance(item, BlockItem) and item != self:
+            #         colliding = True
+            #         break
 
 
-            if colliding:
-                self.setPos(old_pos)
-                event.accept()
-            else:
-                # update block pos
-                self.block.position = new_pos
-                self.update()
-                # update all connections
-                self.update_connections()
+            # if colliding:
+            #     self.setPos(old_pos)
+            #     event.accept()
+            # else:
+            #     # update block pos
+            #     self.block.position = new_pos
+            #     self.update()
+            #     # update all connections
+            #     self.update_connections()
 
     def hoverEnterEvent(self, event):
         """处理悬停进入事件"""

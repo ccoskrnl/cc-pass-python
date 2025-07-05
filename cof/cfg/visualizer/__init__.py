@@ -134,8 +134,7 @@ class CFGVisualizer(QMainWindow):
         edge_item.setZValue(1)
         self.scene.addItem(edge_item)
 
-        self.edge_items[(source.id, dest.id)] = edge_item
-        return edge_item
+        source.edge_dict[dest.id] = edge_item
 
 
     def copy_basic_blocks(self, cfg: ControlFlowGraph):
