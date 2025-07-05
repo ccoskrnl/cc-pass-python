@@ -1,3 +1,4 @@
+import random
 from collections import defaultdict
 from typing import Tuple, Dict
 from ..ir import *
@@ -14,32 +15,110 @@ class ControlFlowGraph:
         self.n_bbs: int = 0
         self.vertex_ids_set = set()
         self.vertices: Dict[int, BasicBlock] = { }
+
+        # [(src_id, dst_id), (src_Id, dst_id)]
         self.edges: List[Tuple] = []
 
-        self.predecessors = defaultdict(list)
-        self.successors = defaultdict(list)
+        # predecessors
+        self.pred = defaultdict(list)
+        # successors
+        self.succ = defaultdict(list)
+        # dominators
+        self.dom: Dict[int, set] = {}
+        # immediate dominators
+        self.idom: Dict[int, int] = {}
 
-        self.construct()
+        self.post_order: List[int] = [ ]
 
-        for (src, dst) in self.edges:
-            self.successors[src].append(dst)
-            self.predecessors[dst].append(src)
+        self.__built__()
 
-        # Add predecessors and successors for all basic blocks.
-        # iterate all vertices
-        for k, v in self.vertices.items():
-            # get all predecessors from self.predecessors[k]
-            for n in self.predecessors[k]:
-                v.pred_bbs[n] = self.vertices[n]
-            # get all successors from self.successors[k]
-            for n in self.successors[k]:
-                v.succ_bbs[n] = self.vertices[n]
+    def post_order_comp(self):
+        """
+        Post-Order
+        :return:
+        """
 
+        # build children map from idom
+        children = defaultdict(list)
+        for node in self.vertex_ids_set:
+            parent = self.idom[node]
+            if parent != -1:
+                children[parent].append(node)
 
+        root = self.root.id
 
+        # iterative post-order traversal
+        stack = [(root, False)]
+        visited = set()
 
+        while stack:
+            node, is_visited = stack.pop()
+            if is_visited:
+                self.post_order.append(node)
+                continue
+            if node in visited:
+                continue
+            visited.add(node)
+            stack.append((node, True))
 
-    def construct(self):
+            for child in reversed(children[node]):
+                stack.append((child, False))
+
+    def dom_comp(self):
+        """
+        A simple approach to computing all the dominators of each node in a flowgraph.
+        :return:
+        """
+        # The algorithm first initializes change = True,
+        change = True
+        # dominators[root_id] = { root_id }
+        root_id = self.root.id
+        self.dom[root_id].add(root_id)
+        # and dominators[i] = { all vertex ids } for each vertex i other than root.
+        for n in self.vertex_ids_set - {root_id}:
+            self.dom[n].update(self.vertex_ids_set)
+
+        while change:
+            change = False
+
+            for n in self.vertex_ids_set - {root_id}:
+                tmp_dominator_set = set(self.vertex_ids_set)
+
+                # For first iteration, p is root_id ( the only member of Pred(B1) )
+                # and so set tmp_dominator_set = { root_id }
+                for p in self.pred[n]:
+                    tmp_dominator_set &= self.dom[p]
+
+                dominator_set = { n } | tmp_dominator_set
+                if dominator_set != self.dom[n]:
+                    change = True
+                    self.dom[n] = dominator_set
+
+    def idom_comp(self):
+        """
+        In essence, the algorithm first sets tmp[i] to dom[i] - { i }
+        and then checks for each vertex i whether each element in tmp[i]
+        has dominators other than itself and, if so, remove them from tmp[i].
+        :return:
+        """
+        root_id = self.root.id
+        tmp = {i: set() for i in range(self.n_bbs)}
+        new_tmp = {i: set() for i in range(self.n_bbs)}
+
+        for n in self.vertex_ids_set:
+            tmp[n] = self.dom[n] - { n }
+            new_tmp[n] = self.dom[n] - { n }
+
+        for n in self.vertex_ids_set - { root_id }:
+            for s in tmp[n]:
+                for t in tmp[n] - { s }:
+                    if t in tmp[s]:
+                        new_tmp[n] -= { t }
+
+        for n in self.vertex_ids_set - { root_id }:
+            self.idom[n] = random.choice(list(new_tmp[n]))
+
+    def construct_cfg(self):
 
         # The Set type guarantees that there are no identical elements.
         leaders_set = set()
@@ -128,6 +207,28 @@ class ControlFlowGraph:
                     src_vertex.ordered_succ_bbs.append(dst_vertex.id)
                     self.edges.append((src_vertex.id, dst_vertex.id))
 
+        for (src, dst) in self.edges:
+            self.succ[src].append(dst)
+            self.pred[dst].append(src)
 
+        # Add predecessors and successors for all basic blocks.
+        # iterate all vertices
+        for k, v in self.vertices.items():
+            # get all predecessors from self.predecessors[k]
+            for n in self.pred[k]:
+                v.pred_bbs[n] = self.vertices[n]
+            # get all successors from self.successors[k]
+            for n in self.succ[k]:
+                v.succ_bbs[n] = self.vertices[n]
 
+    def __built__(self):
+        self.construct_cfg()
 
+        # dominators
+        self.dom: Dict[int, set] = {i: set() for i in range(self.n_bbs)}
+        # immediate dominators
+        self.idom: Dict[int, int] = {i: -1 for i in range(self.n_bbs)}
+
+        self.dom_comp()
+        self.idom_comp()
+        self.post_order_comp()
