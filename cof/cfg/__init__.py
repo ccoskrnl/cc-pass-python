@@ -30,7 +30,56 @@ class ControlFlowGraph:
 
         self.post_order: List[int] = [ ]
 
+        # Dominance Frontier
+        self.df: Dict[int, set] = {}
+        self.dfp: set = set()
+
         self.__built__()
+
+    def dom_front(self):
+        """
+        Dominance Frontier
+        :return:
+        """
+        df: Dict[int, set] = { i: set() for i in range(self.n_bbs)}
+
+        for i in self.post_order:
+            # Compute local component
+            for y in self.succ[i]:
+                if self.idom[y] != i:
+                    df[i] |= {y}
+            # Add on up component
+            z = self.idom[i]
+            if z != -1:
+                for y in df[z]:
+                    if y != self.idom[i]:
+                        df[i] |= {y}
+        self.df = df
+
+    def df_plus(self, sn):
+        """
+        iterated dominance frontier DF+()
+        :param sn:
+        :return:
+        """
+
+        def df_set(s: set):
+            dn = set()
+            for x in s:
+                dn |= self.df[x]
+            return dn
+
+        d: set = set()
+        change = True
+        self.dfp = df_set(sn)
+        while change:
+            change = False
+            d = df_set(sn | self.dfp)
+            if d != self.dfp:
+                self.dfp = d
+                change = True
+
+
 
     def post_order_comp(self):
         """
@@ -69,6 +118,10 @@ class ControlFlowGraph:
         A simple approach to computing all the dominators of each node in a flowgraph.
         :return:
         """
+
+        # dominators
+        self.dom: Dict[int, set] = {i: set() for i in range(self.n_bbs)}
+
         # The algorithm first initializes change = True,
         change = True
         # dominators[root_id] = { root_id }
@@ -101,6 +154,10 @@ class ControlFlowGraph:
         has dominators other than itself and, if so, remove them from tmp[i].
         :return:
         """
+
+        # immediate dominators
+        self.idom: Dict[int, int] = {i: -1 for i in range(self.n_bbs)}
+
         root_id = self.root.id
         tmp = {i: set() for i in range(self.n_bbs)}
         new_tmp = {i: set() for i in range(self.n_bbs)}
@@ -223,12 +280,8 @@ class ControlFlowGraph:
 
     def __built__(self):
         self.construct_cfg()
-
-        # dominators
-        self.dom: Dict[int, set] = {i: set() for i in range(self.n_bbs)}
-        # immediate dominators
-        self.idom: Dict[int, int] = {i: -1 for i in range(self.n_bbs)}
-
         self.dom_comp()
         self.idom_comp()
         self.post_order_comp()
+        self.dom_front()
+        self.df_plus(self.vertex_ids_set)
