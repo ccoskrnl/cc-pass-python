@@ -43,7 +43,7 @@ class BasicBlock:
         self.succ_bbs = defaultdict(list)
 
         self.dominator_tree_parent = None
-        self.dominator_tree_children: List = [ ]
+        self.dominator_tree_children_id: List = [ ]
 
 
     def add_comment(self, comment: str):

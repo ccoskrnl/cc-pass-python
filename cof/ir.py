@@ -176,19 +176,6 @@ def get_assigned_var(inst: IRInst) -> Variable:
     assert inst.result.type == OperandType.VAR
     return inst.result.value
 
-def create_phi_function(varname: str, num_pred_s: int):
-    # create argument list: [undef] * num_predecease
-    args: List[Operand] = []
-    for i in range(0, num_pred_s):
-        args.append(Operand(OperandType.VAR, Variable(varname + '?')))
-
-    return IRInst(
-        op=Op.CALL,
-        operand1=Operand(OperandType.VAR, Variable("φ")),
-        operand2=Operand(OperandType.ARGS, Args(args)),
-        result = Operand(OperandType.VAR, Variable(varname)),
-    )
-
 class Insts:
     def __init__(self):
         self.ir_insts: List[IRInst] = []

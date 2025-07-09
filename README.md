@@ -9,34 +9,10 @@ Python实现的程序分析框架，可作为编译器后端。正在开发中�
 ***
 ## 演示
 
-C 语言伪代码
-
-```c
-k = false;
-i = 1;
-j = 2;
-while ( i <= n)
-{
-	j = j * 2;
-	k = true;
-	if (i <= 5)
-	{
-	    i = i + 1;
-   }
-}
-if (k)
-{
-	printf(j);
-}
-else
-{
-	i += 1;
-}
+自定义MIR语法
 ```
+# test/ssa_example.ir
 
-自定义MIR格式
-
-``` 
     entry
     k := false
     i := 1
@@ -44,22 +20,17 @@ else
 L1:
     cond1 := i <= n
     if cond1 goto &L2
-    if k goto &L4
+    if k goto &L3
     i := i + 1
-    goto &L5
+    goto &L4
 L2:
     j := j * 2
     k := true
-    cond2 := i <= 5
-    if cond2 goto &L3
-    goto &L1
-L3:
     i := i + 1
     goto &L1
-L4:
+L3:
     print j
-    goto &L5
-L5:
+L4:
     exit
 ```
 
@@ -67,12 +38,16 @@ L5:
 
 ![cfg_demo](./tmp/readme_ref_img01.png)
 
+最小化SSA计算展示
+
+![minimal_ssa](./tmp/readme_ref_mininal_ssa.png)
+
 ***
 
 ## TODO
 
 - [ ] 数据流分析框架
-- [ ] 最小化SSA计算
+- [x] 最小化SSA计算
 - [ ] 稀有条件常量传播(符号执行)
 - [ ] 高级数据流分析
 - [ ] 控制树规约

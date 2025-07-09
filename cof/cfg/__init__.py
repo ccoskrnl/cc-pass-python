@@ -1,8 +1,8 @@
 import random
-from collections import defaultdict, deque
+from collections import deque
 from typing import Tuple, Dict
-from ..ir import *
 from .bb import *
+from ..ssa import *
 
 class ControlFlowGraph:
     def __init__(self, insts: Insts):
@@ -10,7 +10,7 @@ class ControlFlowGraph:
         self.insts: Insts = insts
 
         # The root of the cfg
-        self.root: BasicBlock
+        self.root = None
         # The number of basic blocks
         self.n_bbs: int = 0
         self.block_id_set = set()
@@ -69,7 +69,7 @@ class ControlFlowGraph:
                 dn |= self.df[x]
             return dn
 
-        d: set = set()
+        # d: set = set()
         change = True
         self.dfp = df_set(sn)
         while change:
@@ -277,7 +277,6 @@ class ControlFlowGraph:
                 v.succ_bbs[n] = self.blocks[n]
 
     def construct_dominator_tree(self):
-        entry_block: BasicBlock = self.root
         for child, parent in self.idom.items():
             child_bb: BasicBlock = self.blocks[child]
             if parent == -1:
@@ -285,7 +284,7 @@ class ControlFlowGraph:
                 continue
 
             parent_bb: BasicBlock = self.blocks[parent]
-            parent_bb.dominator_tree_children.append(child_bb)
+            parent_bb.dominator_tree_children_id.append(child_bb.id)
 
     def minimal_ssa(self):
         variables: set[str] = set()
@@ -345,7 +344,11 @@ class ControlFlowGraph:
         for var in variables:
             stacks[var].append(0)
 
-        # we already have built dominator tree.
+        # We already have built dominator tree.
+        # Due to the fact that we set the phi function
+        # in the order of dominating the tree for variable
+        # renaming, for loop structures (with edges),
+        # the versions of variables are not strictly incremented.
 
         def rename_use_operand(operand: Operand):
             if operand:
@@ -367,13 +370,14 @@ class ControlFlowGraph:
 
             nonlocal counters, stacks, block_versions, phi_operands
 
-            # record stack status at the entry of the current block.
-            entry_versions = { }
-            for v in variables:
-                entry_versions[v] = stacks[v][-1]
+            # # record stack status at the entry of the current block.
+            # entry_versions = { }
+            # for v in variables:
+            #     entry_versions[v] = stacks[v][-1]
 
             # 1
             # handle all phi insts in current block at first
+            # allocate new version for phi result.
             phi_def_list: List[str] = [ ]
             for phi_inst_in_cbb in block_para.insts[0: block_para.phi_insts_idx_end]:
                 v: Variable = phi_inst_in_cbb.result.value
@@ -388,14 +392,12 @@ class ControlFlowGraph:
 
                 # add new version into stack
                 stacks[v_n].append(counters[v_n])
-
                 phi_def_list.append(v_n)
 
-                # phi_operands[block_para.id][v_n] = [None] * len(self.pred[block_para.id])
 
             # 2
             # rename ordinary instructions
-            for inst_in_cbb in block_para.insts[block_para.phi_insts_idx_end: block_para.num_of_insts]:
+            for inst_in_cbb in block_para.insts[block_para.phi_insts_idx_end: ]:
                 # rename (use) operands
                 rename_use_operand(inst_in_cbb.operand1)
                 rename_use_operand(inst_in_cbb.operand2)
@@ -437,12 +439,11 @@ class ControlFlowGraph:
                     phi_operands[succ][varname][cbb_idx_in_pred] = f"{varname}-{current_ver}"
 
             # 5
-            for child in block_para.dominator_tree_children:
-                dfs(child)
+            for child_id in block_para.dominator_tree_children_id:
+                dfs(self.blocks[child_id])
 
             # 6
             # pop up the current scope version when backtracking
-
             for inst_in_cbb in reversed(block_para.insts[block_para.phi_insts_idx_end:]):
                 if is_assignment_inst(inst_in_cbb):
                     result: Variable = inst_in_cbb.result.value
@@ -453,16 +454,7 @@ class ControlFlowGraph:
                 stacks[v].pop()
 
 
-            # for phi in block.insts[0: block.phi_insts_idx_end]:
-            #     varname = phi.result.value.varname.split('-')[0]
-            #     stacks[varname].pop()
-            #
-            # for inst in block.insts[block.phi_insts_idx_end: block.num_of_insts]:
-            #     if is_assignment_inst(inst):
-            #         var = get_assigned_var(inst)
-            #         stacks[var.varname].pop()
-
-
+        # enter
         dfs(self.root)
 
         # apply phi operands and rename.
@@ -477,11 +469,9 @@ class ControlFlowGraph:
 
                 operands = [ ]
                 for pred_id in self.pred[block_id]:
-                    # pred = self.blocks[pred_id]
                     pred_index = self.pred[block_id].index(pred_id)
                     version = phi_data[base_varname][pred_index]
                     operands.append(version)
-                    # operands.append(f"{base_varname}-{version}")
 
                 phi_args: Args = phi.operand2.value
                 for index, operand_str in enumerate(operands):
@@ -489,7 +479,10 @@ class ControlFlowGraph:
                     phi_arg_var.varname = operand_str
 
 
-
+    def print_dom_tree(self, block: BasicBlock):
+        print(", ".join(map(str, block.dominator_tree_children_id)) + '\t\t\t')
+        for child_id in block.dominator_tree_children_id:
+            self.print_dom_tree(self.blocks[child_id])
 
 
     def __built__(self):
@@ -500,4 +493,6 @@ class ControlFlowGraph:
         self.post_order_comp()
         self.dom_front()
         self.df_plus(self.block_id_set)
+        # self.print_dom_tree(self.root)
         self.minimal_ssa()
+
