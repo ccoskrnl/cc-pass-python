@@ -39,7 +39,7 @@ L3:
     i := i + 1
     goto &L1
 L4:
-    print j
+    printf ( i j k )
     goto &L5
 L5:
     exit

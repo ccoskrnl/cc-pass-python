@@ -34,8 +34,12 @@ class VisualBasicBlock(BasicBlock):
         inst_offset = self.inst_idx_list[0]
         max_inst_idx = self.inst_idx_list[-1]
         idx_width = len(str(max_inst_idx))
+
+        for phi_inst in self.insts[0: self.phi_insts_idx_end]:
+            phi_inst_str = " " * (idx_width + 2) + str(phi_inst) + "\n"
+            self.content += phi_inst_str
         for inst_idx in self.inst_idx_list:
-            self.content += f"{inst_idx:>{idx_width}}: {str(self.insts[inst_idx - inst_offset])}\n"
+            self.content += f"{inst_idx:>{idx_width}}: {str(self.insts[inst_idx - inst_offset + self.phi_insts_idx_end])}\n"
 
         self.content_body_height = 0
         self.content_font = None
@@ -144,7 +148,8 @@ class EdgeItem(QGraphicsPathItem):
 
 
         # 计算控制点
-        ctrl_dist = min(150, abs(start_pos.y() - end_pos.y()) * 0.5)
+        horizontal_offset = min(200, abs(start_pos.x() - end_pos.x()) * 0.3)
+        vertical_offset = min(150, abs(start_pos.y() - end_pos.y()) * 0.5)
 
 
         # 创建曲线路径
@@ -152,18 +157,28 @@ class EdgeItem(QGraphicsPathItem):
         path.moveTo(start_pos)
 
         if self.connection_type == EdgeType.tree:
-            ctrl1 = QPointF(start_pos_x, start_pos_y + ctrl_dist)
-            ctrl2 = QPointF(end_pos_x, end_pos_y - ctrl_dist)
+            ctrl1 = QPointF(start_pos_x, start_pos_y + vertical_offset)
+            ctrl2 = QPointF(end_pos_x, end_pos_y - vertical_offset)
             path.cubicTo(ctrl1, ctrl2, end_pos)
         elif self.connection_type == EdgeType.back:
             control_offset = 300
             if start_pos_x < end_pos_x:
-                control1 = QPointF(start_pos_x + control_offset, start_pos_y + ctrl_dist)
-                control2 = QPointF(end_pos_x - control_offset, end_pos_y - ctrl_dist)
+                control1 = QPointF(
+                    start_pos_x + control_offset + horizontal_offset
+                    , start_pos_y + vertical_offset)
+                control2 = QPointF(
+                    end_pos_x - control_offset - horizontal_offset
+                    , end_pos_y - vertical_offset)
             else:
-                control1 = QPointF(start_pos_x - control_offset, start_pos_y + ctrl_dist)
-                control2 = QPointF(end_pos_x + control_offset, end_pos_y - ctrl_dist)
+                control1 = QPointF(
+                    start_pos_x - control_offset - horizontal_offset
+                    , start_pos_y + vertical_offset)
+                control2 = QPointF(
+                    end_pos_x + control_offset + horizontal_offset
+                    , end_pos_y - vertical_offset)
+
             path.cubicTo(control1, control2, end_pos)
+
             arrow_base = control2
         elif self.connection_type == EdgeType.forward:
 

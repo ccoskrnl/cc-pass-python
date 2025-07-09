@@ -1,7 +1,8 @@
 from collections import defaultdict
 from enum import Enum
 from typing import List
-from ..ir import Insts
+from ..ir import Insts, Variable, Op, IRInst
+
 
 class EdgeType(Enum):
     tree = 0
@@ -18,7 +19,9 @@ class BasicBlockBranchType(Enum):
 class BasicBlock:
     def __init__(self, bb_id: int, start_idx: int, end_idx: int, insts: Insts):
         self.inst_idx_list: List[int] = [i for i in range(start_idx, end_idx)]
-        self.insts = insts.ir_insts[start_idx: end_idx]
+        self.insts: List[IRInst] = insts.ir_insts[start_idx: end_idx]
+        self.phi_insts_idx_end = 0
+
         self.num_of_insts = (end_idx - start_idx)
         self.id = bb_id
 
@@ -39,6 +42,9 @@ class BasicBlock:
         self.pred_bbs = defaultdict(list)
         self.succ_bbs = defaultdict(list)
 
+        self.dominator_tree_parent = None
+        self.dominator_tree_children: List = [ ]
+
 
     def add_comment(self, comment: str):
         self.comment = comment
@@ -47,5 +53,17 @@ class BasicBlock:
         self.inst_idx_list.extend([i for i in range(start_index, end_index)])
         self.num_of_insts += (end_index - start_index)
 
+    def add_phi(self, phi_inst: IRInst):
+        self.insts.insert(0, phi_inst)
+        self.phi_insts_idx_end += 1
+
     def inst_exist(self, inst_index: int):
         return inst_index in self.inst_idx_list
+
+def has_phi_for_var(block: BasicBlock, varname: str):
+    # iterate all insts
+    for inst in block.insts:
+        if inst.op == Op.CALL and inst.operand1.value.varname == "φ":
+            if inst.result.value.varname == varname:
+                return True
+    return False

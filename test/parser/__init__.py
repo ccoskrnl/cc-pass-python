@@ -1,8 +1,24 @@
 import re
+from typing import List, Dict
 
-from .operandtype import *
-from cof.ir import *
+from .tokentype import *
+from cof.ir import Insts, IRInst, OperandType, Operand, Variable
 import sys
+
+token_type_2_operand_type: Dict[TokenType, OperandType] = {
+
+    TokenType.ADDR: OperandType.ADDR,
+    TokenType.VAR: OperandType.VAR,
+
+    TokenType.INT: OperandType.INT,
+    TokenType.FLOAT: OperandType.FLOAT,
+    TokenType.BOOL: OperandType.BOOL,
+    TokenType.STR: OperandType.STR,
+}
+
+def token_type_to_operand_type(token_type: TokenType) -> OperandType:
+    assert token_type != TokenType.UNKNOWN
+    return token_type_2_operand_type[token_type]
 
 class Parser:
     def __init__(self, filename):
@@ -50,19 +66,19 @@ class Parser:
 
         for value in tokens:
             if value in {'entry', 'exit', 'if', 'goto', 'print'}:
-                token_sequence.append(Token(OperandType.OP, get_op_type(value)))
+                token_sequence.append(Token(TokenType.OP, get_op_type(value)))
             elif value == 'false':
-                token_sequence.append(Token(OperandType.BOOL, False))
+                token_sequence.append(Token(TokenType.BOOL, False))
             elif value == 'true':
-                token_sequence.append(Token(OperandType.BOOL, True))
+                token_sequence.append(Token(TokenType.BOOL, True))
             elif re.match(OP_PATTERN, value):
-                token_sequence.append(Token(OperandType.OP, get_op_type(value)))
+                token_sequence.append(Token(TokenType.OP, get_op_type(value)))
             elif re.match(VAR_NAME_PATTERN, value):
-                token_sequence.append(Token(OperandType.ID, value))
+                token_sequence.append(Token(TokenType.VAR, Variable(value)))
             elif re.match(INT_PATTERN, value):
                 try:
                     num = int(value)
-                    token_sequence.append(Token(OperandType.INT, num))
+                    token_sequence.append(Token(TokenType.INT, num))
                 except ValueError as e:
                     print("\nfatal error: ")
                     # print(f"error processing value on line {current_line} ")
@@ -77,7 +93,7 @@ class Parser:
             elif re.match(FLOAT_PATTERN, value):
                 try:
                     num = float(value)
-                    token_sequence.append(Token(OperandType.FLOAT, num))
+                    token_sequence.append(Token(TokenType.FLOAT, num))
                 except ValueError as e:
                     print("\nfatal error: ")
                     # print(f"error processing value on line {current_line} ")
@@ -89,9 +105,10 @@ class Parser:
                     traceback.print_exc()
 
                     sys.exit(-1)
-
             elif re.match(LABEL_REF_PATTERN, value):
-                token_sequence.append(Token(OperandType.ADDR, self.labels_table[value[1:]]))
+                token_sequence.append(Token(TokenType.ADDR, self.labels_table[value[1:]]))
+            elif re.match(PARENTHESIS_PATTERN, value):
+                token_sequence.append(Token(TokenType.PRUN, value))
             else:
                 print("\nfatal error: ")
                 print("Cannot recognize the token...")
@@ -121,9 +138,21 @@ class Parser:
             and (token_seq[4].is_id() or token_seq[4].is_literal())
         ):
             inst.op = token_seq[3].value
-            inst.operand1 = Operand(token_seq[2].token_type, token_seq[2].value)
-            inst.operand2 = Operand(token_seq[4].token_type, token_seq[4].value)
-            inst.result = Operand(token_seq[0].token_type, token_seq[0].value)
+
+            inst.operand1 = Operand(
+                token_type_to_operand_type(token_seq[2].token_type)
+                , token_seq[2].value
+            )
+
+            inst.operand2 = Operand(
+                token_type_to_operand_type(token_seq[4].token_type)
+                , token_seq[4].value
+            )
+
+            inst.result = Operand(
+                token_type_to_operand_type(token_seq[0].token_type)
+                , token_seq[0].value
+            )
 
         # if operand goto Label
         elif (
@@ -134,8 +163,15 @@ class Parser:
             and token_seq[3].is_label()
         ):
             inst.op = Op.IF
-            inst.operand1 = Operand(token_seq[1].token_type, token_seq[1].value)
-            inst.result = Operand(token_seq[3].token_type, token_seq[3].value)
+            inst.operand1 = Operand(
+                token_type_to_operand_type(token_seq[1].token_type)
+                , token_seq[1].value
+            )
+
+            inst.result = Operand(
+                token_type_to_operand_type(token_seq[3].token_type)
+                , token_seq[3].value
+            )
 
         # result := var
         elif (
@@ -145,8 +181,14 @@ class Parser:
             and token_seq[2].is_value()
         ):
             inst.op = Op.ASSIGN
-            inst.operand1 = Operand(token_seq[2].token_type, token_seq[2].value)
-            inst.result = Operand(token_seq[0].token_type, token_seq[0].value)
+            inst.operand1 = Operand(
+                token_type_to_operand_type(token_seq[2].token_type)
+                , token_seq[2].value
+            )
+            inst.result = Operand(
+                token_type_to_operand_type(token_seq[0].token_type)
+                , token_seq[0].value
+            )
 
         # goto Label
         elif (
@@ -155,7 +197,54 @@ class Parser:
             and token_seq[1].is_label()
         ):
             inst.op = Op.GOTO
-            inst.result = Operand(token_seq[1].token_type, token_seq[1].value)
+            inst.result = Operand(
+                token_type_to_operand_type(token_seq[1].token_type)
+                , token_seq[1].value
+            )
+
+        # m = max ( a 4 )
+        elif (
+            token_seq[0].is_id()
+            and token_seq[1].is_assign()
+            and token_seq[2].is_id()
+            and token_seq[3].is_left_parenthesis()
+            and token_seq[-1].is_right_parenthesis()
+        ):
+            inst.op = Op.CALL
+            inst.result = Operand(
+                token_type_to_operand_type(token_seq[0].token_type)
+                , token_seq[0].value
+            )
+            inst.operand1 = Operand(
+                token_type_to_operand_type(token_seq[2].token_type)
+                , token_seq[2].value
+            )
+            args = [ ]
+            for i in range(4, len(token_seq) - 1):
+                args.append(Operand(
+                    token_type_to_operand_type(token_seq[i].token_type)
+                    , token_seq[i].value
+                ))
+            inst.operand2 = Operand(OperandType.ARGS, args)
+
+        # phi ( v1 v2 v3 )
+        elif (
+            token_seq[0].is_id()
+            and token_seq[1].is_left_parenthesis()
+            and token_seq[-1].is_right_parenthesis()
+        ):
+            inst.op = Op.CALL
+            inst.operand1 = Operand(
+                token_type_to_operand_type(token_seq[0].token_type)
+                , token_seq[0].value
+            )
+            args = [ ]
+            for i in range(2, len(token_seq) - 1):
+                args.append(Operand(
+                    token_type_to_operand_type(token_seq[i].token_type)
+                    , token_seq[i].value
+                ))
+            inst.operand2 = Operand(OperandType.ARGS, args)
 
         # print operand
         elif (
@@ -163,7 +252,10 @@ class Parser:
             and (token_seq[0].is_print() or token_seq[1].is_value())
         ):
             inst.op = Op.PRINT
-            inst.operand1 = Operand(token_seq[1].token_type, token_seq[1].value)
+            inst.operand1 = Operand(
+                token_type_to_operand_type(token_seq[1].token_type)
+                , token_seq[1].value
+            )
 
 
         # entry/exit

@@ -1,0 +1,19 @@
+    entry
+    k := false
+    i := 1
+    j := 2
+L1:
+    cond1 := i <= n
+    if cond1 goto &L2
+    if k goto &L3
+    i := i + 1
+    goto &L4
+L2:
+    j := j * 2
+    k := true
+    i := i + 1
+    goto &L1
+L3:
+    print j
+L4:
+    exit

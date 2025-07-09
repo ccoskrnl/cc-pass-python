@@ -348,7 +348,7 @@ class CFGVisualizer(QMainWindow):
         self.inst_font_metrics = QFontMetrics(self.inst_font)
 
         self.entry_block = cfg.root
-        self.blocks = cfg.vertices
+        self.blocks = cfg.blocks
 
         self.setWindowTitle("Control Flow Graph Visualizer")
         self.setGeometry(100, 100, 1600, 900)

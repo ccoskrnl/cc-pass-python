@@ -1,5 +1,5 @@
 import random
-from collections import defaultdict
+from collections import defaultdict, deque
 from typing import Tuple, Dict
 from ..ir import *
 from .bb import *
@@ -7,14 +7,14 @@ from .bb import *
 class ControlFlowGraph:
     def __init__(self, insts: Insts):
         # Instruction List
-        self.insts = insts
+        self.insts: Insts = insts
 
         # The root of the cfg
-        self.root = None
+        self.root: BasicBlock
         # The number of basic blocks
         self.n_bbs: int = 0
-        self.vertex_ids_set = set()
-        self.vertices: Dict[int, BasicBlock] = { }
+        self.block_id_set = set()
+        self.blocks: Dict[int, BasicBlock] = { }
 
         # [(src_id, dst_id), (src_Id, dst_id)]
         self.edges: List[Tuple] = []
@@ -79,8 +79,6 @@ class ControlFlowGraph:
                 self.dfp = d
                 change = True
 
-
-
     def post_order_comp(self):
         """
         Post-Order
@@ -89,7 +87,7 @@ class ControlFlowGraph:
 
         # build children map from idom
         children = defaultdict(list)
-        for node in self.vertex_ids_set:
+        for node in self.block_id_set:
             parent = self.idom[node]
             if parent != -1:
                 children[parent].append(node)
@@ -128,14 +126,14 @@ class ControlFlowGraph:
         root_id = self.root.id
         self.dom[root_id].add(root_id)
         # and dominators[i] = { all vertex ids } for each vertex i other than root.
-        for n in self.vertex_ids_set - {root_id}:
-            self.dom[n].update(self.vertex_ids_set)
+        for n in self.block_id_set - {root_id}:
+            self.dom[n].update(self.block_id_set)
 
         while change:
             change = False
 
-            for n in self.vertex_ids_set - {root_id}:
-                tmp_dominator_set = set(self.vertex_ids_set)
+            for n in self.block_id_set - {root_id}:
+                tmp_dominator_set = set(self.block_id_set)
 
                 # For first iteration, p is root_id ( the only member of Pred(B1) )
                 # and so set tmp_dominator_set = { root_id }
@@ -162,17 +160,17 @@ class ControlFlowGraph:
         tmp = {i: set() for i in range(self.n_bbs)}
         new_tmp = {i: set() for i in range(self.n_bbs)}
 
-        for n in self.vertex_ids_set:
+        for n in self.block_id_set:
             tmp[n] = self.dom[n] - { n }
             new_tmp[n] = self.dom[n] - { n }
 
-        for n in self.vertex_ids_set - { root_id }:
+        for n in self.block_id_set - {root_id}:
             for s in tmp[n]:
                 for t in tmp[n] - { s }:
                     if t in tmp[s]:
                         new_tmp[n] -= { t }
 
-        for n in self.vertex_ids_set - { root_id }:
+        for n in self.block_id_set - {root_id}:
             self.idom[n] = random.choice(list(new_tmp[n]))
 
     def construct_cfg(self):
@@ -209,21 +207,21 @@ class ControlFlowGraph:
         for leader_idx in range(0, len(sorted_list) - 1):
             bb_id = self.n_bbs
             src_vertex = BasicBlock(bb_id, sorted_list[leader_idx], sorted_list[leader_idx+1], self.insts)
-            self.vertices[bb_id] = src_vertex
-            self.vertex_ids_set.add(bb_id)
+            self.blocks[bb_id] = src_vertex
+            self.block_id_set.add(bb_id)
             self.n_bbs += 1
 
         # Construct the exit basic block
         bb_id = self.n_bbs
         src_vertex = BasicBlock(bb_id, sorted_list[-1], self.insts.num, self.insts)
-        self.vertices[bb_id] = src_vertex
-        self.vertex_ids_set.add(bb_id)
+        self.blocks[bb_id] = src_vertex
+        self.block_id_set.add(bb_id)
         self.n_bbs += 1
 
-        self.root = self.vertices[0]
+        self.root = self.blocks[0]
 
         # Updating Edges in the CFG
-        for src_vertex in self.vertices.values():
+        for src_vertex in self.blocks.values():
 
             # Get the last inst in basic block.
             last_inst_idx = src_vertex.inst_idx_list[-1]
@@ -233,7 +231,7 @@ class ControlFlowGraph:
             if last_inst.op == Op.GOTO:
                 target_inst_idx = int(last_inst.result.value)
                 dst_vertex = next((target_bb \
-                                   for target_bb in self.vertices.values() \
+                                   for target_bb in self.blocks.values() \
                                    if target_bb.inst_exist(target_inst_idx)))
 
                 # record the next bb
@@ -248,7 +246,7 @@ class ControlFlowGraph:
                 if last_inst.op == Op.IF:
                     target_inst_idx = int(last_inst.result.value)
                     dst_vertex = next((target_bb \
-                                       for target_bb in self.vertices.values() \
+                                       for target_bb in self.blocks.values() \
                                        if target_bb.inst_exist(target_inst_idx)))
                     src_vertex.branch_type = BasicBlockBranchType.cond
                     src_vertex.ordered_succ_bbs.append(dst_vertex.id)
@@ -257,7 +255,7 @@ class ControlFlowGraph:
                     src_vertex.branch_type = BasicBlockBranchType.jump
 
                 dst_vertex = next((target_bb \
-                                   for target_bb in self.vertices.values() \
+                                   for target_bb in self.blocks.values() \
                                    if target_bb.inst_exist(last_inst_idx + 1)), -1)
 
                 if dst_vertex != -1:
@@ -270,18 +268,236 @@ class ControlFlowGraph:
 
         # Add predecessors and successors for all basic blocks.
         # iterate all vertices
-        for k, v in self.vertices.items():
+        for k, v in self.blocks.items():
             # get all predecessors from self.predecessors[k]
             for n in self.pred[k]:
-                v.pred_bbs[n] = self.vertices[n]
+                v.pred_bbs[n] = self.blocks[n]
             # get all successors from self.successors[k]
             for n in self.succ[k]:
-                v.succ_bbs[n] = self.vertices[n]
+                v.succ_bbs[n] = self.blocks[n]
+
+    def construct_dominator_tree(self):
+        entry_block: BasicBlock = self.root
+        for child, parent in self.idom.items():
+            child_bb: BasicBlock = self.blocks[child]
+            if parent == -1:
+                child_bb.dominator_tree_parent = None
+                continue
+
+            parent_bb: BasicBlock = self.blocks[parent]
+            parent_bb.dominator_tree_children.append(child_bb)
+
+    def minimal_ssa(self):
+        variables: set[str] = set()
+
+        # collect all variables.
+        for inst in self.insts.ir_insts:
+            if is_assignment_inst(inst):
+                variables.add(str(get_assigned_var(inst)))
+
+        # record all blocks which defines variable
+        def_sites: Dict[str, List] = {v: [] for v in variables}
+        for block in self.blocks.values():
+            for inst in block.insts:
+                if is_assignment_inst(inst):
+                    variable: Variable = get_assigned_var(inst)
+                    def_sites[str(variable)].append(block.id)
+
+        # insert phi function for each variable
+        for varname in variables:
+            # initialize worklist and even_on_worklist
+
+            # the sequence stores blocks that need be handled
+            worklist = deque(def_sites[varname])
+            even_on_worklist = set(def_sites[varname])
+
+            # handle worklist iteratively
+            while worklist:
+                # extract current define block id
+                def_block_id = worklist.popleft()
+
+                # iterate the dominance frontier of def_block_id
+                for y in self.df[def_block_id]:
+                    # check if y has phi function of v
+                    if not has_phi_for_var(self.blocks[y], varname):
+                        # insert phi function as the first inst in y
+                        new_phi = create_phi_function(varname, num_pred_s=len(self.pred[y]))
+                        self.blocks[y].add_phi(new_phi)
+
+                        # check if y is inserted for the first time, join into worklist.
+                        if y not in even_on_worklist:
+                            even_on_worklist.add(y)
+                            worklist.append(y)
+
+        self.rename_variables(def_sites, variables)
+
+    def rename_variables(self, def_sites: Dict[str, List], variables: set[str]) -> None:
+
+        # initialize version counters
+        counters: Dict[str, int] = {v: 0 for v in def_sites.keys()}
+        # initialize current version stacks
+        stacks = defaultdict(list)
+        # record version at the exit of each block { block: { var: version } }
+        block_versions: Dict[int, dict] = defaultdict(dict)
+        # temporary storage phi operands { block: { var: [operands] }
+        phi_operands: Dict[int, dict] = defaultdict(lambda: defaultdict(list))
+
+        for var in variables:
+            stacks[var].append(0)
+
+        # we already have built dominator tree.
+
+        def rename_use_operand(operand: Operand):
+            if operand:
+                if operand.type == OperandType.VAR:
+                    if operand.value.varname in stacks:
+                        operand.value.varname = f"{operand.value.varname}-{stacks[operand.value.varname][-1]}"
+                elif operand.type == OperandType.ARGS:
+                    for arg in operand.value:
+                        if arg.type == OperandType.VAR:
+                            if arg.value.varname in stacks:
+                                arg.value.varname = f"{arg.value.varname}-{stacks[arg.value.varname][-1]}"
+            else:
+                pass
+
+
+
+        # depth first search
+        def dfs(block_para: BasicBlock):
+
+            nonlocal counters, stacks, block_versions, phi_operands
+
+            # record stack status at the entry of the current block.
+            entry_versions = { }
+            for v in variables:
+                entry_versions[v] = stacks[v][-1]
+
+            # 1
+            # handle all phi insts in current block at first
+            phi_def_list: List[str] = [ ]
+            for phi_inst_in_cbb in block_para.insts[0: block_para.phi_insts_idx_end]:
+                v: Variable = phi_inst_in_cbb.result.value
+                # original variable name
+                v_n = v.varname.split('-')[0]
+
+                # construct new varname and assign to phi result
+                counters[v_n] += 1
+                new_ver = counters[v_n]
+                new_var = Variable(f"{v_n}-{new_ver}")
+                phi_inst_in_cbb.result.value = new_var
+
+                # add new version into stack
+                stacks[v_n].append(counters[v_n])
+
+                phi_def_list.append(v_n)
+
+                # phi_operands[block_para.id][v_n] = [None] * len(self.pred[block_para.id])
+
+            # 2
+            # rename ordinary instructions
+            for inst_in_cbb in block_para.insts[block_para.phi_insts_idx_end: block_para.num_of_insts]:
+                # rename (use) operands
+                rename_use_operand(inst_in_cbb.operand1)
+                rename_use_operand(inst_in_cbb.operand2)
+
+                # rename (def)
+                if is_assignment_inst(inst_in_cbb):
+                    v = get_assigned_var(inst_in_cbb)
+                    counters[v.varname] += 1
+                    new_ver = counters[v.varname]
+                    new_var = Variable(f"{v.varname}-{new_ver}")
+                    inst_in_cbb.result.value = new_var
+                    stacks[v.varname].append(new_ver)
+
+            # 3
+            # record variable version at the exit of the current block
+            exit_versions = { }
+            for v in variables:
+                exit_versions[v] = stacks[v][-1]
+            block_versions[block_para.id] = exit_versions
+
+            # 4
+            # collect operands for phi function in all successors.
+            for succ in self.succ[block_para.id]:
+                cbb_idx_in_pred = self.pred[succ].index(block_para.id)
+                succ_bb = self.blocks[succ]
+
+                if succ not in phi_operands:
+                    phi_operands[succ] = { }
+
+                for phi_inst_in_cbb in succ_bb.insts[0: succ_bb.phi_insts_idx_end]:
+                    result: Variable = phi_inst_in_cbb.result.value
+                    varname = result.varname.split('-')[0]
+
+                    if varname not in phi_operands[succ]:
+                        phi_operands[succ][varname] = [f"{varname}?"] * len(self.pred[succ])
+
+                    current_ver = stacks[varname][-1] if varname in stacks and stacks[varname] else 0
+                    # save operands
+                    phi_operands[succ][varname][cbb_idx_in_pred] = f"{varname}-{current_ver}"
+
+            # 5
+            for child in block_para.dominator_tree_children:
+                dfs(child)
+
+            # 6
+            # pop up the current scope version when backtracking
+
+            for inst_in_cbb in reversed(block_para.insts[block_para.phi_insts_idx_end:]):
+                if is_assignment_inst(inst_in_cbb):
+                    result: Variable = inst_in_cbb.result.value
+                    varname = result.varname.split('-')[0]
+                    stacks[varname].pop()
+
+            for v in reversed(phi_def_list):
+                stacks[v].pop()
+
+
+            # for phi in block.insts[0: block.phi_insts_idx_end]:
+            #     varname = phi.result.value.varname.split('-')[0]
+            #     stacks[varname].pop()
+            #
+            # for inst in block.insts[block.phi_insts_idx_end: block.num_of_insts]:
+            #     if is_assignment_inst(inst):
+            #         var = get_assigned_var(inst)
+            #         stacks[var.varname].pop()
+
+
+        dfs(self.root)
+
+        # apply phi operands and rename.
+        for block_id, phi_data in phi_operands.items():
+            block = self.blocks[block_id]
+            for phi in block.insts[0: block.phi_insts_idx_end]:
+                result_var: Variable = phi.result.value
+                base_varname: str = result_var.varname.split('-')[0]
+
+                if base_varname not in phi_data:
+                    continue
+
+                operands = [ ]
+                for pred_id in self.pred[block_id]:
+                    # pred = self.blocks[pred_id]
+                    pred_index = self.pred[block_id].index(pred_id)
+                    version = phi_data[base_varname][pred_index]
+                    operands.append(version)
+                    # operands.append(f"{base_varname}-{version}")
+
+                phi_args: Args = phi.operand2.value
+                for index, operand_str in enumerate(operands):
+                    phi_arg_var: Variable = phi_args.args[index].value
+                    phi_arg_var.varname = operand_str
+
+
+
+
 
     def __built__(self):
         self.construct_cfg()
         self.dom_comp()
         self.idom_comp()
+        self.construct_dominator_tree()
         self.post_order_comp()
         self.dom_front()
-        self.df_plus(self.vertex_ids_set)
+        self.df_plus(self.block_id_set)
+        self.minimal_ssa()

@@ -138,7 +138,7 @@ class CFGVisualizer(QMainWindow):
 
 
     def copy_basic_blocks(self, cfg: ControlFlowGraph):
-        vertexes = cfg.vertices
+        vertexes = cfg.blocks
         for k, v in vertexes.items():
             self.blocks[k] = VisualBasicBlock(v)
 
