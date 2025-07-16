@@ -1,12 +1,12 @@
-from random import randint
-
-from ..bb import BasicBlock, BasicBlockBranchType, EdgeType
 import math
 
-from PyQt6.QtWidgets import QGraphicsTextItem, QGraphicsRectItem, QGraphicsItem, QMenu, QGraphicsScene, QGraphicsSimpleTextItem, \
-    QApplication, QGraphicsPathItem, QTextEdit
-from PyQt6.QtGui import QBrush, QPen, QColor, QTextCursor, QCursor, QAction, QLinearGradient, QPainterPath, QGradient
 from PyQt6.QtCore import Qt, QPointF, QRectF, QEvent
+from PyQt6.QtGui import QBrush, QPen, QColor, QTextCursor, QAction, QLinearGradient, QPainterPath, QGradient
+from PyQt6.QtWidgets import QGraphicsTextItem, QGraphicsRectItem, QGraphicsItem, QMenu, QGraphicsSimpleTextItem, \
+    QApplication, QGraphicsPathItem
+
+from ..bb import BasicBlock, BasicBlockBranchType, EdgeType
+from ...ir import MIRInst
 
 
 class VisualBasicBlock(BasicBlock):
@@ -30,16 +30,7 @@ class VisualBasicBlock(BasicBlock):
         self.tree = None
 
         self.content = ""
-
-        inst_offset = self.inst_idx_list[0]
-        max_inst_idx = self.inst_idx_list[-1]
-        idx_width = len(str(max_inst_idx))
-
-        for phi_inst in self.insts[0: self.phi_insts_idx_end]:
-            phi_inst_str = " " * (idx_width + 2) + str(phi_inst) + "\n"
-            self.content += phi_inst_str
-        for inst_idx in self.inst_idx_list:
-            self.content += f"{inst_idx:>{idx_width}}: {str(self.insts[inst_idx - inst_offset + self.phi_insts_idx_end])}\n"
+        self.build_content()
 
         self.content_body_height = 0
         self.content_font = None
@@ -60,10 +51,19 @@ class VisualBasicBlock(BasicBlock):
         # A dict, key is vbb that be moved, value is corresponding edge.
         self.edge_dict = { }
 
+    def build_content(self):
+        last_inst: MIRInst = self.insts.ret_inst_by_idx(-1)
+        addr_width_max = len(str(last_inst.addr))
+        for phi_inst in self.insts.ret_phi_insts():
+            self.content += " " * (addr_width_max + 2) + str(phi_inst) + "\n"
+        for ord_inst in self.insts.ret_ordinary_insts():
+            self.content += f"{ord_inst.addr:>{addr_width_max}}: {str(ord_inst)}\n"
+
+
 class EdgeItem(QGraphicsPathItem):
 
     # green
-    true_branch_color = QColor(180, 240, 200)
+    true_branch_color = QColor(0, 153, 0)
     # red
     false_branch_color = QColor(200, 0, 0)
     # black
@@ -285,10 +285,10 @@ class BlockContentItem(QGraphicsTextItem):
         )
 
         self.document().setDocumentMargin(5)  # 内边距
-        self.set_fixed_width(self.block.width)
+        self.set_fixed_width()
 
 
-    def set_fixed_width(self, width):
+    def set_fixed_width(self):
         # text_width = width - self.document().documentMargin() * 2
         # self.setTextWidth(text_width)
         self.setTextWidth(self.block.width)

@@ -5,9 +5,9 @@ from .bb import *
 from ..ssa import *
 
 class ControlFlowGraph:
-    def __init__(self, insts: Insts):
+    def __init__(self, insts: MIRInsts):
         # Instruction List
-        self.insts: Insts = insts
+        self.insts: MIRInsts = insts
 
         # The root of the cfg
         self.root = None
@@ -206,14 +206,14 @@ class ControlFlowGraph:
         sorted_list = sorted(leaders_set)
         for leader_idx in range(0, len(sorted_list) - 1):
             bb_id = self.n_bbs
-            src_vertex = BasicBlock(bb_id, sorted_list[leader_idx], sorted_list[leader_idx+1], self.insts)
+            src_vertex = BasicBlock(bb_id, self.insts.ret_insts_by_pos(sorted_list[leader_idx], sorted_list[leader_idx+1]))
             self.blocks[bb_id] = src_vertex
             self.block_id_set.add(bb_id)
             self.n_bbs += 1
 
         # Construct the exit basic block
         bb_id = self.n_bbs
-        src_vertex = BasicBlock(bb_id, sorted_list[-1], self.insts.num, self.insts)
+        src_vertex = BasicBlock(bb_id, self.insts.ret_insts_by_pos(sorted_list[-1], self.insts.num))
         self.blocks[bb_id] = src_vertex
         self.block_id_set.add(bb_id)
         self.n_bbs += 1
@@ -224,15 +224,15 @@ class ControlFlowGraph:
         for src_vertex in self.blocks.values():
 
             # Get the last inst in basic block.
-            last_inst_idx = src_vertex.inst_idx_list[-1]
-            last_inst = src_vertex.insts[-1]
+            last_inst = src_vertex.insts.ret_inst_by_idx(-1)
+            last_inst_idx = last_inst.addr
 
             # Handling GOTO statement
             if last_inst.op == Op.GOTO:
                 target_inst_idx = int(last_inst.result.value)
                 dst_vertex = next((target_bb \
                                    for target_bb in self.blocks.values() \
-                                   if target_bb.inst_exist(target_inst_idx)))
+                                   if target_bb.insts.inst_exist_by_addr(target_inst_idx)))
 
                 # record the next bb
                 src_vertex.branch_type = BasicBlockBranchType.jump
@@ -247,7 +247,7 @@ class ControlFlowGraph:
                     target_inst_idx = int(last_inst.result.value)
                     dst_vertex = next((target_bb \
                                        for target_bb in self.blocks.values() \
-                                       if target_bb.inst_exist(target_inst_idx)))
+                                       if target_bb.insts.inst_exist_by_addr(target_inst_idx)))
                     src_vertex.branch_type = BasicBlockBranchType.cond
                     src_vertex.ordered_succ_bbs.append(dst_vertex.id)
                     self.edges.append((src_vertex.id, dst_vertex.id))
@@ -256,7 +256,7 @@ class ControlFlowGraph:
 
                 dst_vertex = next((target_bb \
                                    for target_bb in self.blocks.values() \
-                                   if target_bb.inst_exist(last_inst_idx + 1)), -1)
+                                   if target_bb.insts.inst_exist_by_addr(last_inst_idx + 1)), -1)
 
                 if dst_vertex != -1:
                     src_vertex.ordered_succ_bbs.append(dst_vertex.id)
@@ -297,7 +297,7 @@ class ControlFlowGraph:
         # record all blocks which defines variable
         def_sites: Dict[str, List] = {v: [] for v in variables}
         for block in self.blocks.values():
-            for inst in block.insts:
+            for inst in block.insts.ret_insts():
                 if is_assignment_inst(inst):
                     variable: Variable = get_assigned_var(inst)
                     def_sites[str(variable)].append(block.id)
@@ -321,7 +321,7 @@ class ControlFlowGraph:
                     if not has_phi_for_var(self.blocks[y], varname):
                         # insert phi function as the first inst in y
                         new_phi = create_phi_function(varname, num_pred_s=len(self.pred[y]))
-                        self.blocks[y].add_phi(new_phi)
+                        self.blocks[y].insts.add_phi_inst(new_phi)
 
                         # check if y is inserted for the first time, join into worklist.
                         if y not in even_on_worklist:
@@ -379,7 +379,7 @@ class ControlFlowGraph:
             # handle all phi insts in current block at first
             # allocate new version for phi result.
             phi_def_list: List[str] = [ ]
-            for phi_inst_in_cbb in block_para.insts[0: block_para.phi_insts_idx_end]:
+            for phi_inst_in_cbb in block_para.insts.ret_phi_insts():
                 v: Variable = phi_inst_in_cbb.result.value
                 # original variable name
                 v_n = v.varname.split('-')[0]
@@ -397,7 +397,7 @@ class ControlFlowGraph:
 
             # 2
             # rename ordinary instructions
-            for inst_in_cbb in block_para.insts[block_para.phi_insts_idx_end: ]:
+            for inst_in_cbb in block_para.insts.ret_ordinary_insts():
                 # rename (use) operands
                 rename_use_operand(inst_in_cbb.operand1)
                 rename_use_operand(inst_in_cbb.operand2)
@@ -427,7 +427,7 @@ class ControlFlowGraph:
                 if succ not in phi_operands:
                     phi_operands[succ] = { }
 
-                for phi_inst_in_cbb in succ_bb.insts[0: succ_bb.phi_insts_idx_end]:
+                for phi_inst_in_cbb in succ_bb.insts.ret_phi_insts():
                     result: Variable = phi_inst_in_cbb.result.value
                     varname = result.varname.split('-')[0]
 
@@ -444,7 +444,7 @@ class ControlFlowGraph:
 
             # 6
             # pop up the current scope version when backtracking
-            for inst_in_cbb in reversed(block_para.insts[block_para.phi_insts_idx_end:]):
+            for inst_in_cbb in reversed(block_para.insts.ret_ordinary_insts()):
                 if is_assignment_inst(inst_in_cbb):
                     result: Variable = inst_in_cbb.result.value
                     varname = result.varname.split('-')[0]
@@ -460,7 +460,7 @@ class ControlFlowGraph:
         # apply phi operands and rename.
         for block_id, phi_data in phi_operands.items():
             block = self.blocks[block_id]
-            for phi in block.insts[0: block.phi_insts_idx_end]:
+            for phi in block.insts.ret_phi_insts():
                 result_var: Variable = phi.result.value
                 base_varname: str = result_var.varname.split('-')[0]
 
@@ -478,12 +478,10 @@ class ControlFlowGraph:
                     phi_arg_var: Variable = phi_args.args[index].value
                     phi_arg_var.varname = operand_str
 
-
     def print_dom_tree(self, block: BasicBlock):
         print(", ".join(map(str, block.dominator_tree_children_id)) + '\t\t\t')
         for child_id in block.dominator_tree_children_id:
             self.print_dom_tree(self.blocks[child_id])
-
 
     def __built__(self):
         self.construct_cfg()

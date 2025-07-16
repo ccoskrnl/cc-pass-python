@@ -1,7 +1,7 @@
 from collections import defaultdict
 from enum import Enum
 from typing import List
-from ..ir import Insts, Variable, Op, IRInst
+from ..ir import MIRInsts, Variable, Op, MIRInst
 
 
 class EdgeType(Enum):
@@ -17,17 +17,20 @@ class BasicBlockBranchType(Enum):
 
 
 class BasicBlock:
-    def __init__(self, bb_id: int, start_idx: int, end_idx: int, insts: Insts):
-        self.inst_idx_list: List[int] = [i for i in range(start_idx, end_idx)]
-        self.insts: List[IRInst] = insts.ir_insts[start_idx: end_idx]
-        self.phi_insts_idx_end = 0
+    def __init__(self, bb_id: int, insts: List[MIRInst]):
+    # def __init__(self, bb_id: int, start_idx: int, end_idx: int, insts: MIRInsts):
 
-        self.num_of_insts = (end_idx - start_idx)
+        # self.inst_idx_list: List[int] = [i for i in range(start_idx, end_idx)]
+        # self.insts: List[IRInst] = insts.ir_insts[start_idx: end_idx]
+        self.insts: MIRInsts = MIRInsts(insts)
+        # self.phi_insts_idx_end = 0
+
+        # self.num_of_insts = (end_idx - start_idx)
         self.id = bb_id
 
         self.comment = ""
 
-        self.tag = "B" + str(bb_id) + "[addr " + str(self.inst_idx_list[0]) + "]"
+        self.tag = "B" + str(bb_id) + "[addr " + str(self.insts.ret_inst_by_idx(-1).addr) + "]"
 
         self.branch_type: BasicBlockBranchType = BasicBlockBranchType.jump
         # 1. if the branch_type is jump,
@@ -49,21 +52,8 @@ class BasicBlock:
     def add_comment(self, comment: str):
         self.comment = comment
 
-    def add_insts(self, start_index, end_index):
-        self.inst_idx_list.extend([i for i in range(start_index, end_index)])
-        self.num_of_insts += (end_index - start_index)
+    # def add_insts(self, start_index, end_index):
+    #     self.inst_idx_list.extend([i for i in range(start_index, end_index)])
+    #     self.num_of_insts += (end_index - start_index)
 
-    def add_phi(self, phi_inst: IRInst):
-        self.insts.insert(0, phi_inst)
-        self.phi_insts_idx_end += 1
 
-    def inst_exist(self, inst_index: int):
-        return inst_index in self.inst_idx_list
-
-def has_phi_for_var(block: BasicBlock, varname: str):
-    # iterate all insts
-    for inst in block.insts:
-        if inst.op == Op.CALL and inst.operand1.value.varname == "φ":
-            if inst.result.value.varname == varname:
-                return True
-    return False

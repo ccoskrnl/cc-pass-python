@@ -1,5 +1,4 @@
 import bisect
-import math
 from collections import deque, defaultdict
 from typing import Dict, Set
 
@@ -326,7 +325,7 @@ class CFGLayout:
             max_width = title_width
 
         block.title_height = block.title_font_matrics.height() + TITLE_GAP
-        block.content_body_height = block.content_font_matrics.height() * (len(block.insts) + CONTENT_GAP)
+        block.content_body_height = block.content_font_matrics.height() * (len(block.insts.ret_insts()) + CONTENT_GAP)
         block.height = block.title_height + block.content_body_height
         block.width = max_width + BLOCK_PAINT_WIDTH_PAD
         block.padded_height = block.height + block.height_pad * 2

@@ -1,5 +1,6 @@
 from enum import Enum
-from typing import List
+from typing import List, Optional, Union
+
 
 class OperandType(Enum):
 
@@ -35,6 +36,8 @@ class Op(Enum):
     EQ = 12
     NEQ = 13
 
+    PHI = 77
+
     CALL = 90
 
     PRINT = 96
@@ -63,6 +66,7 @@ OP_STR_MAP = {
     Op.GE: ">",
     Op.EQ: "=",
     Op.NEQ: "!=",
+    Op.PHI: "φ",
     Op.ENTRY: "entry",
     Op.EXIT: "exit",
     Op.PRINT: "print"
@@ -108,7 +112,7 @@ class Operand:
     def _format_const(self):
         return str(self.value)
 
-class IRInst:
+class MIRInst:
     """
     a = b + c: (op=ADD, operand1=b, operand2=c, result=a)
     m = max(b, c): (op=CALL,
@@ -118,6 +122,7 @@ class IRInst:
 
     """
     def __init__(self, **kwargs):
+        self.addr = kwargs['addr']
         self.op = kwargs['op']
         self.operand1: Operand = kwargs['operand1']
         self.operand2: Operand = kwargs['operand2']
@@ -131,7 +136,8 @@ class IRInst:
             Op.ENTRY: self._format_entry_exit,
             Op.EXIT: self._format_entry_exit,
             Op.PRINT: self._format_print,
-            Op.CALL: self._format_call
+            Op.CALL: self._format_call,
+            Op.PHI: self._format_phi
         }.get(self.op, self._format_operator)
 
         return formatter()
@@ -165,22 +171,68 @@ class IRInst:
                 f"{self._val(self.operand1)}("
                 f"{self._val(self.operand2)})"
             )
+    def _format_phi(self):
+        return (
+            f"{self._val(self.result)} := "
+            f"{self._val(self.operand1)}("
+            f"{self._val(self.operand2)})"
+        )
 
     def _val(self, operand: Operand):
         return "" if operand is None else str(operand)
 
-def is_assignment_inst(inst: IRInst) -> bool:
+def is_assignment_inst(inst: MIRInst) -> bool:
     return True if inst.op in Assignment_Op else False
 
-def get_assigned_var(inst: IRInst) -> Variable:
+def get_assigned_var(inst: MIRInst) -> Variable:
     assert inst.result.type == OperandType.VAR
     return inst.result.value
 
-class Insts:
-    def __init__(self):
-        self.ir_insts: List[IRInst] = []
-        self.num: int = 0
 
-    def add_an_inst(self, inst: IRInst):
-        self.num += 1
-        self.ir_insts.append(inst)
+class MIRInsts:
+    def __init__(self, insts:Optional[List[MIRInst]]):
+        if insts:
+            self.ir_insts: List[MIRInst] = insts
+            self.num: int = len(insts)
+        else:
+            self.ir_insts: List[MIRInst] = []
+            self.num: int = 0
+
+        self.phi_insts_idx_end: int = 0
+
+    def inst_exist_by_addr(self, addr: int) -> bool:
+        for inst in self.ret_insts():
+            if inst.addr == addr:
+                return True
+        return False
+
+    def add_phi_inst(self, phi_inst: MIRInst) -> None:
+        self.ir_insts.insert(0, phi_inst)
+        self.phi_insts_idx_end += 1
+
+    def insert_insts(self, index: Optional[int], insts: Union[MIRInst, List[MIRInst]]) -> None:
+
+        if not index or index >= self.num:
+            index = self.num
+
+        if isinstance(insts, MIRInst):
+            self.ir_insts.insert(index, insts)
+            self.num += 1
+        elif isinstance(insts, List) and all(isinstance(item, MIRInst) for item in insts):
+            self.ir_insts[index:index] = insts
+            self.num += len(insts)
+
+    def ret_inst_by_idx(self, index: int) -> MIRInst:
+        return self.ir_insts[index]
+
+    def ret_insts_by_pos(self, start_pos: int, end_pos: int) -> List[MIRInst]:
+        return self.ir_insts[start_pos:end_pos]
+
+    def ret_insts(self) -> List[MIRInst]:
+        return self.ir_insts
+
+    def ret_phi_insts(self) -> List[MIRInst]:
+        return self.ir_insts[: self.phi_insts_idx_end]
+
+    def ret_ordinary_insts(self) -> List[MIRInst]:
+        return self.ir_insts[self.phi_insts_idx_end:]

@@ -1,19 +1,14 @@
-import math
-from typing import Dict, Set
-from collections import deque, defaultdict
+from typing import Dict
 
-from .. import ControlFlowGraph
-from .vbb import VisualBasicBlock, BlockItem, EdgeItem
+from PyQt6.QtCore import Qt, QPointF
+from PyQt6.QtGui import QPainter, QColor, QFont, QFontMetrics
+from PyQt6.QtWidgets import (QMainWindow, QGraphicsView, QGraphicsScene,
+                             QVBoxLayout, QWidget, QStatusBar, QSplitter)
+
 from .tree_layout import CFGLayout, Tree, TreeLayout
+from .vbb import VisualBasicBlock, BlockItem, EdgeItem
+from .. import ControlFlowGraph
 
-
-from PyQt6.QtWidgets import (QApplication, QMainWindow, QGraphicsView, QGraphicsScene,
-                             QGraphicsRectItem, QGraphicsTextItem, QGraphicsPathItem,
-                             QGraphicsItem, QMenu, QVBoxLayout, QWidget, QHBoxLayout,
-                             QLabel, QStatusBar, QToolBar, QSplitter, QTextEdit,
-                             QFontComboBox, QSpinBox)
-from PyQt6.QtCore import Qt, QPointF, QRectF, QTimer, pyqtSignal
-from PyQt6.QtGui import QPainter, QBrush, QPen, QColor, QFont, QPainterPath, QLinearGradient, QAction, QFontMetrics
 
 class CFGVisualizer(QMainWindow):
     def __init__(self, cfg: ControlFlowGraph):

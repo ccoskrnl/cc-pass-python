@@ -2,7 +2,7 @@ import re
 from typing import List, Dict
 
 from .tokentype import *
-from cof.ir import Insts, IRInst, OperandType, Operand, Variable
+from cof.ir import MIRInsts, MIRInst, OperandType, Operand, Variable
 import sys
 
 token_type_2_operand_type: Dict[TokenType, OperandType] = {
@@ -21,12 +21,13 @@ def token_type_to_operand_type(token_type: TokenType) -> OperandType:
     return token_type_2_operand_type[token_type]
 
 class Parser:
+    counter = 0
     def __init__(self, filename):
         self.labels_table = { }
         self.ir_file = filename
 
-    def parse(self) -> Insts:
-        insts = Insts()
+    def parse(self) -> MIRInsts:
+        insts = MIRInsts(None)
         index = 0
         need_to_add_label = False
         label_tag: str = ""
@@ -54,7 +55,7 @@ class Parser:
 
             for line in lines:
                 if not re.match(LABEL_DEF_PATTERN, line):
-                    insts.add_an_inst(self.generate_an_inst(line))
+                    insts.insert_insts(None, self.generate_an_inst(line))
 
 
 
@@ -120,12 +121,16 @@ class Parser:
         return token_sequence
 
 
-    def generate_an_inst(self, text) -> IRInst:
-        inst = IRInst(
+    def generate_an_inst(self, text) -> MIRInst:
+
+        inst = MIRInst(
+            addr=self.counter,
             op=Op.UNKNOWN,
             operand1=None,
             operand2=None,
             result=None)
+        self.counter += 1
+
 
         token_seq: List[Token] = self.recognize_token(text)
         # result := operand1 Op operand2

@@ -1,32 +1,45 @@
+from .cfg.bb import BasicBlock
 from .ir import *
 
-class SSAVariable:
-    def __init__(self, name, version=0):
+class SSAVariable(Variable):
+    def __init__(self, variable):
+        self.__dict__ == variable.__dict__
         # original variable name
-        self.name = name
+        self.version = 0
 
-        self.version = version
     def __str__(self):
-        return f"{self.name}-{self.version}"
+        return f"{self.varname}-{self.version}"
 
-    @classmethod
-    def from_string(cls, s: str):
-        if '_' in s:
-            name, ver = s.rsplit('-', 1)
-            return cls(name, int(ver))
-        return cls(s)
+class SSAEdge:
+    def __init__(self, source: BasicBlock, dest: BasicBlock, ssa_var: SSAVariable):
+        self.source: BasicBlock = source
+        self.dest: BasicBlock = dest
+        self.ssa_var: SSAVariable = ssa_var
 
+class SSAEdgeBuilder:
+    def __init__(self, cfg):
+        self.cfg = cfg
+        self.edges = [ ]
+        self.def_map = { }
 
-def create_phi_function(varname: str, num_pred_s: int):
+def create_phi_function(varname: str, num_pred_s: int) -> MIRInst:
     # create argument list: [undef] * num_predecease
     args: List[Operand] = []
     for i in range(0, num_pred_s):
         args.append(Operand(OperandType.VAR, Variable(varname + '?')))
 
-    return IRInst(
-        op=Op.CALL,
+    return MIRInst(
+        addr=-1,
+        op=Op.PHI,
         operand1=Operand(OperandType.VAR, Variable("φ")),
         operand2=Operand(OperandType.ARGS, Args(args)),
         result = Operand(OperandType.VAR, Variable(varname)),
     )
+
+def has_phi_for_var(block: BasicBlock, varname: str):
+    # iterate all insts
+    for inst in block.insts.ret_phi_insts():
+        if inst.result.value.varname == varname:
+            return True
+    return False
 
