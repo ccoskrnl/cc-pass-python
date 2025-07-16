@@ -5,6 +5,7 @@ from typing import List, Optional, Union
 class OperandType(Enum):
 
     VAR = 1
+    SSA_VAR = 2
 
     BOOL = 10
     FLOAT = 11

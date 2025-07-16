@@ -10,10 +10,10 @@ class ControlFlowGraph:
         self.insts: MIRInsts = insts
 
         # The root of the cfg
-        self.root = None
+        self.root: Optional[BasicBlock, None] = None
         # The number of basic blocks
         self.n_bbs: int = 0
-        self.block_id_set = set()
+        self.block_id_set: set[int] = set()
         self.blocks: Dict[int, BasicBlock] = { }
 
         # [(src_id, dst_id), (src_Id, dst_id)]
@@ -354,12 +354,20 @@ class ControlFlowGraph:
             if operand:
                 if operand.type == OperandType.VAR:
                     if operand.value.varname in stacks:
-                        operand.value.varname = f"{operand.value.varname}-{stacks[operand.value.varname][-1]}"
+
+                        operand.type = OperandType.SSA_VAR
+                        operand.value = SSAVariable(operand.value, stacks[operand.value.varname][-1])
+
                 elif operand.type == OperandType.ARGS:
                     for arg in operand.value:
-                        if arg.type == OperandType.VAR:
+                        # if arg.type == OperandType.VAR:
+                        if isinstance(arg.value, Variable):
                             if arg.value.varname in stacks:
-                                arg.value.varname = f"{arg.value.varname}-{stacks[arg.value.varname][-1]}"
+
+                                arg.type = OperandType.SSA_VAR
+                                arg.value = SSAVariable(arg.value, stacks[arg.value.varname][-1])
+
+
             else:
                 pass
 
@@ -380,15 +388,15 @@ class ControlFlowGraph:
             # allocate new version for phi result.
             phi_def_list: List[str] = [ ]
             for phi_inst_in_cbb in block_para.insts.ret_phi_insts():
-                v: Variable = phi_inst_in_cbb.result.value
+
+                assert isinstance(phi_inst_in_cbb.result.value, SSAVariable)
+                v: SSAVariable = phi_inst_in_cbb.result.value
                 # original variable name
-                v_n = v.varname.split('-')[0]
+                v_n = v.base_name
 
                 # construct new varname and assign to phi result
-                counters[v_n] += 1
-                new_ver = counters[v_n]
-                new_var = Variable(f"{v_n}-{new_ver}")
-                phi_inst_in_cbb.result.value = new_var
+                counters[v.base_name] += 1
+                v.version = counters[v_n]
 
                 # add new version into stack
                 stacks[v_n].append(counters[v_n])
@@ -404,11 +412,14 @@ class ControlFlowGraph:
 
                 # rename (def)
                 if is_assignment_inst(inst_in_cbb):
-                    v = get_assigned_var(inst_in_cbb)
+                    v: Variable = get_assigned_var(inst_in_cbb)
                     counters[v.varname] += 1
                     new_ver = counters[v.varname]
-                    new_var = Variable(f"{v.varname}-{new_ver}")
+                    new_var = SSAVariable(v, new_ver)
+
+                    inst_in_cbb.result.type = OperandType.SSA_VAR
                     inst_in_cbb.result.value = new_var
+
                     stacks[v.varname].append(new_ver)
 
             # 3
@@ -428,15 +439,15 @@ class ControlFlowGraph:
                     phi_operands[succ] = { }
 
                 for phi_inst_in_cbb in succ_bb.insts.ret_phi_insts():
-                    result: Variable = phi_inst_in_cbb.result.value
-                    varname = result.varname.split('-')[0]
+                    result: SSAVariable = phi_inst_in_cbb.result.value
+                    varname = result.base_name
 
                     if varname not in phi_operands[succ]:
-                        phi_operands[succ][varname] = [f"{varname}?"] * len(self.pred[succ])
+                        phi_operands[succ][varname] = [-1] * len(self.pred[succ]) # default version
 
                     current_ver = stacks[varname][-1] if varname in stacks and stacks[varname] else 0
                     # save operands
-                    phi_operands[succ][varname][cbb_idx_in_pred] = f"{varname}-{current_ver}"
+                    phi_operands[succ][varname][cbb_idx_in_pred] = current_ver
 
             # 5
             for child_id in block_para.dominator_tree_children_id:
@@ -446,9 +457,16 @@ class ControlFlowGraph:
             # pop up the current scope version when backtracking
             for inst_in_cbb in reversed(block_para.insts.ret_ordinary_insts()):
                 if is_assignment_inst(inst_in_cbb):
-                    result: Variable = inst_in_cbb.result.value
-                    varname = result.varname.split('-')[0]
-                    stacks[varname].pop()
+                    if isinstance(inst_in_cbb.result.value, Variable):
+                        result: Variable = inst_in_cbb.result.value
+                        varname = result.varname
+                        stacks[varname].pop()
+                    elif isinstance(inst_in_cbb.result.value, SSAVariable):
+                        result: SSAVariable = inst_in_cbb.result.value
+                        stacks[result.base_name].pop()
+                    else:
+                        assert True
+
 
             for v in reversed(phi_def_list):
                 stacks[v].pop()
@@ -459,24 +477,28 @@ class ControlFlowGraph:
 
         # apply phi operands and rename.
         for block_id, phi_data in phi_operands.items():
-            block = self.blocks[block_id]
+
+            # calculate pred block index
+            pred_index_map: Dict[int, int] = {pred_id: idx for idx, pred_id in enumerate(self.pred[block_id])}
+
+            block: BasicBlock = self.blocks[block_id]
+
             for phi in block.insts.ret_phi_insts():
-                result_var: Variable = phi.result.value
-                base_varname: str = result_var.varname.split('-')[0]
+                result_var: SSAVariable = phi.result.value
+                base_varname: str = result_var.base_name
 
                 if base_varname not in phi_data:
                     continue
 
-                operands = [ ]
-                for pred_id in self.pred[block_id]:
-                    pred_index = self.pred[block_id].index(pred_id)
-                    version = phi_data[base_varname][pred_index]
-                    operands.append(version)
-
                 phi_args: Args = phi.operand2.value
-                for index, operand_str in enumerate(operands):
-                    phi_arg_var: Variable = phi_args.args[index].value
-                    phi_arg_var.varname = operand_str
+                for index, pred_id in enumerate(self.pred[block_id]):
+                    # get index from dict
+                    pred_index = pred_index_map[pred_id]
+                    # obtain the version number of the corresponding predecessor.
+                    version = phi_data[base_varname][pred_index]
+                    phi_arg_var: SSAVariable = phi_args.args[index].value
+                    phi_arg_var.version = version
+
 
     def print_dom_tree(self, block: BasicBlock):
         print(", ".join(map(str, block.dominator_tree_children_id)) + '\t\t\t')
