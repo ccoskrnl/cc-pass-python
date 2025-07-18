@@ -1,6 +1,7 @@
-from typing import Optional, List
+from collections import defaultdict
+from typing import Optional, List, Dict
 
-from cof.cfg import ControlFlowGraph, BasicBlock
+from cof.cfg import ControlFlowGraph, BasicBlock, BasicBlockId
 
 
 class Loop:
@@ -56,6 +57,8 @@ class LoopAnalyzer:
         analysing loop structure in cfg.
         :return:
         """
+        self._find_natural_loops()
+        self._compute_loop_nesting()
         return self
 
     def _find_natural_loops(self):
@@ -65,27 +68,28 @@ class LoopAnalyzer:
         """
 
         # recognize back edges
-        back_edges = [ ]
+        header_to_latches: Dict[BasicBlock, List[BasicBlock]] = defaultdict(list)
         for bb in self.cfg.blocks.values():
             for succ in bb.succ_bbs.values():
                 if self.cfg.ranks[succ.id] < self.cfg.ranks[bb.id]:
-                    back_edges.append((bb, succ))
+                    header_to_latches[succ].append(bb)
 
-        for latch, header in back_edges:
+        for header, latches in header_to_latches.items():
             loop = Loop(header)
             loop.add_block(header)
+            loop.latches.update(latches)
 
             # add loop body
-            worklist: List[BasicBlock] = [ latch ]
-            visited = set()
+            worklist: List[BasicBlock] = list(latches)
+            visited: set[BasicBlockId] = set()
 
             while worklist:
                 current = worklist.pop(0)
-                if current in visited:
+                if current.id in visited:
                     continue
-                visited.add(current)
+                visited.add(current.id)
 
-                if current != header and current not in loop.body_blocks:
+                if current.id != header.id and current not in loop.body_blocks:
                     loop.add_block(current)
 
                 for pred in current.pred_bbs.values():

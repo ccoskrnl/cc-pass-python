@@ -6,9 +6,9 @@
 #    	j = j * 2;
 #    	k = true;
 #		if (i <= 5)
-#		{
 #    	    i = i + 1;
-#	    }
+#       else
+#           i = i - 1;
 #    }
 #    if (k)
 #    {
@@ -34,6 +34,7 @@ L2:
     k := true
     cond2 := i <= 5
     if cond2 goto &L3
+    i := i - 1
     goto &L1
 L3:
     i := i + 1
