@@ -1,8 +1,7 @@
-import re
 from typing import List, Dict
 
 from .tokentype import *
-from cof.ir import MIRInsts, MIRInst, OperandType, Operand, Variable, Args
+from cof.ir.mir import MIRInsts, MIRInst, OperandType, Operand, Variable, Args
 import sys
 
 token_type_2_operand_type: Dict[TokenType, OperandType] = {

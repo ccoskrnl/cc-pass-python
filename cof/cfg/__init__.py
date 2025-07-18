@@ -1,42 +1,45 @@
 import random
-from collections import deque
-from typing import Tuple, Dict
+from collections import deque, defaultdict
+from typing import Tuple
+
 from .bb import *
-from ..ssa import *
+from cof.analysis.ssa import *
+
 
 class ControlFlowGraph:
     def __init__(self, insts: MIRInsts):
         # Instruction List
         self.insts: MIRInsts = insts
 
-        self.insts_dict_by_id: Dict[int, MIRInst] = \
+        self.insts_dict_by_id: Dict[MIRInstId, MIRInst] = \
             {inst.id: inst for inst in self.insts.ret_insts()}
 
-        self.inst_id_to_block: Dict[int, BasicBlock] = { }
+        self.inst_id_to_block: Dict[BasicBlockId, BasicBlock] = { }
 
         # The root of the cfg
         self.root: Optional[BasicBlock, None] = None
         # The number of basic blocks
         self.n_bbs: int = 0
-        self.block_id_set: set[int] = set()
-        self.blocks: Dict[int, BasicBlock] = { }
+        self.block_id_set: set[BasicBlockId] = set()
+        self.blocks: Dict[BasicBlockId, BasicBlock] = { }
 
         # [(src_id, dst_id), (src_Id, dst_id)]
-        self.edges: List[Tuple] = []
+        self.edges: List[Tuple[BasicBlockId, BasicBlockId]] = []
 
         # direct predecessor nodes
-        self.pred: Dict[int, List[int]] = defaultdict(list)
+        self.pred: Dict[BasicBlockId, List[BasicBlockId]] = defaultdict(list)
         # direct successor nodes
-        self.succ: Dict[int, List[int]] = defaultdict(list)
+        self.succ: Dict[BasicBlockId, List[BasicBlockId]] = defaultdict(list)
         # dominators
-        self.dom: Dict[int, set] = {}
+        self.dom: Dict[BasicBlockId, set] = {}
         # immediate dominators
-        self.idom: Dict[int, int] = {}
+        self.idom: Dict[BasicBlockId, BasicBlockId] = {}
 
-        self.post_order: List[int] = [ ]
+        self.post_order: List[BasicBlockId] = [ ]
 
         # Dominance Frontier
-        self.df: Dict[int, set] = {}
+        self.df: Dict[BasicBlockId, set] = {}
+        # Dominance Frontier Plus
         self.dfp: set = set()
 
         self.ranks: Dict[int, int] = { }
@@ -588,7 +591,7 @@ class ControlFlowGraph:
                     version = phi_data[base_varname][pred_index]
                     phi_arg_var: SSAVariable = phi_args.args[index].value
                     phi_arg_var.version = version
-    def ssa_edges_comp(self):
+    def ssa_edges_comp(self, loop_info) -> SSAEdgeBuilder:
         """
         Note:
             Must be guaranteed that all variables have been converted to SSAVariable form before
@@ -598,6 +601,28 @@ class ControlFlowGraph:
         edges: List[SSAEdge] = [ ]
         def_sites: Dict[str, int] = { } # var_name -> MIRInst.id
         phi_sources = defaultdict(list) # phi_inst_id -> original definition list
+
+        def is_loop_carried(phi_block: BasicBlock, def_block: BasicBlock, lo) -> bool:
+            """
+            check if edge which from definition inst to phi inst is loop carried
+            :param phi_block:
+            :param def_block:
+            :param lo: Loop Info
+            :return:
+            """
+
+            phi_loop = lo.get_loop_for_block(phi_block)
+
+            if not phi_loop:
+                return False
+
+            # check if definition block is in the same loop.
+            if phi_loop.contains_block(def_block):
+                # check if definition block is in the loop body (not header)
+                if def_block != phi_loop.header:
+                    return True
+
+            return False
 
         # stage 1.
         # collect all definition.
@@ -625,6 +650,8 @@ class ControlFlowGraph:
         # stage 3.
         for block in self.blocks.values():
             for phi in block.insts.ret_phi_insts():
+
+                # get predecessor id list
                 predecessor_id_list = self.pred[block.id]
 
                 for i, operand in enumerate(phi.ret_operand_list()):
@@ -636,26 +663,29 @@ class ControlFlowGraph:
                         src_block = self.find_defining_block(src_inst_id)
 
                         if src_block and src_block.id in predecessor_id_list:
-                            edges.append(SSAEdge(src_inst_id, phi.id, ssa_name))
+                            ssa_edge = SSAEdge(src_inst_id, phi.id, ssa_name)
+                            if is_loop_carried(block, src_block, loop_info):
+                                ssa_edge.mark_loop_carried()
+                            edges.append(ssa_edge)
+
+        return SSAEdgeBuilder(self, edges, def_sites)
 
 
     # ++++++++ Management ++++++++
-    def new_a_block(self, bb_id: int, block_insts: List[MIRInst]):
+    def new_a_block(self, bb_id: BasicBlockId, block_insts: List[MIRInst]):
         src_vertex = BasicBlock(bb_id, block_insts)
-        self.inst_id_to_block = \
-            {inst.id: src_vertex for inst in block_insts}
+
+        for inst in block_insts:
+            self.inst_id_to_block[inst.id] = src_vertex
+
         self.blocks[bb_id] = src_vertex
         self.block_id_set.add(bb_id)
         self.n_bbs += 1
-    def find_defining_block(self, inst: Union[int, MIRInst]) -> Optional[BasicBlock]:
+    def find_defining_block(self, inst: Union[MIRInstId, MIRInst]) -> Optional[BasicBlock]:
         if isinstance(inst, int):
-            for block in self.blocks.values():
-                if block.insts.inst_exist_by_id(inst):
-                    return block
+            return self.inst_id_to_block[inst]
         elif isinstance(inst, MIRInst):
-            for block in self.blocks.values():
-                if block.insts.inst_exist(inst):
-                    return block
+            return self.inst_id_to_block[inst.id]
         return None
     def add_new_inst(self, inst: MIRInst, block: BasicBlock):
         self.insts.insert_insts(-1, inst)

@@ -1,5 +1,5 @@
-from .cfg.bb import BasicBlock
-from .ir import *
+from cof.cfg.bb import BasicBlock
+from cof.ir.mir import *
 
 class SSAVariable:
 
@@ -17,9 +17,9 @@ class SSAVariable:
 
 class SSAEdge:
     __slots__ = ('source', 'target', 'var', 'type', 'loop_carried')
-    def __init__(self, source, target, var):
-        self.source = source
-        self.target = target
+    def __init__(self, source: MIRInstId, target: MIRInstId, var):
+        self.source: MIRInstId = source
+        self.target: MIRInstId = target
         self.var = var
 
         # REGULAR / PHI_ARG / LOOP_CARRIED
@@ -35,10 +35,10 @@ class SSAEdge:
 
 
 class SSAEdgeBuilder:
-    def __init__(self, cfg):
+    def __init__(self, cfg, edges, def_map):
         self.cfg = cfg
-        self.edges = [ ]
-        self.def_map = { }
+        self.edges = edges
+        self.def_map = def_map
 
 def create_phi_function(varname: str, num_pred_s: int) -> MIRInst:
     args: List[Operand] = []

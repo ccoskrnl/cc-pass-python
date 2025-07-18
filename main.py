@@ -1,5 +1,5 @@
 from cof import CodeOptimizer
-from cof.ir import MIRInsts
+from cof.ir.mir import MIRInsts
 from test import testing
 
 if __name__ == "__main__":

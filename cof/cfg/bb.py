@@ -1,8 +1,8 @@
-from collections import defaultdict
 from enum import Enum
 from typing import List, Optional, Dict
-from ..ir import MIRInsts, Variable, Op, MIRInst
+from cof.ir.mir import MIRInsts, MIRInst
 
+type BasicBlockId = int
 
 class EdgeType(Enum):
     tree = 0
@@ -17,7 +17,7 @@ class BasicBlockBranchType(Enum):
 
 
 class BasicBlock:
-    def __init__(self, bb_id: Optional[int], insts: Optional[List[MIRInst]]):
+    def __init__(self, bb_id: Optional[BasicBlockId], insts: Optional[List[MIRInst]]):
     # def __init__(self, bb_id: int, start_idx: int, end_idx: int, insts: MIRInsts):
 
         # self.inst_idx_list: List[int] = [i for i in range(start_idx, end_idx)]
@@ -32,7 +32,7 @@ class BasicBlock:
 
 
         # self.num_of_insts = (end_idx - start_idx)
-        self.id: int = bb_id if isinstance(bb_id, int) else -1
+        self.id: BasicBlockId = bb_id if isinstance(bb_id, int) else -1
 
         self.comment: str = ""
 

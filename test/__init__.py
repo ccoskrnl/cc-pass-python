@@ -1,4 +1,3 @@
-from cof.ir import *
 from .parser import *
 
 def testing() -> MIRInsts:
