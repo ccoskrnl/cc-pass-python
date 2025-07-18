@@ -16,11 +16,23 @@ class SSAVariable:
         return self.name
 
 class SSAEdge:
-    __slots__ = ('source', 'target', 'var')
+    __slots__ = ('source', 'target', 'var', 'type', 'loop_carried')
     def __init__(self, source, target, var):
         self.source = source
         self.target = target
         self.var = var
+
+        # REGULAR / PHI_ARG / LOOP_CARRIED
+        self.type = "REGULAR"
+        self.loop_carried = False
+
+    def mark_loop_carried(self):
+        self.type = "LOOP_CARRIED"
+        self.loop_carried = True
+    def __repr__(self):
+        edge_type = self.type if self.type != "REGULAR" else ""
+        return f"{self.source} -> {self.target} [{self.var}] {edge_type}"
+
 
 class SSAEdgeBuilder:
     def __init__(self, cfg):

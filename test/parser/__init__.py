@@ -2,7 +2,7 @@ import re
 from typing import List, Dict
 
 from .tokentype import *
-from cof.ir import MIRInsts, MIRInst, OperandType, Operand, Variable
+from cof.ir import MIRInsts, MIRInst, OperandType, Operand, Variable, Args
 import sys
 
 token_type_2_operand_type: Dict[TokenType, OperandType] = {
@@ -230,7 +230,7 @@ class Parser:
                     token_type_to_operand_type(token_seq[i].token_type)
                     , token_seq[i].value
                 ))
-            inst.operand2 = Operand(OperandType.ARGS, args)
+            inst.operand2 = Operand(OperandType.ARGS, Args(args))
 
         # phi ( v1 v2 v3 )
         elif (
@@ -249,7 +249,7 @@ class Parser:
                     token_type_to_operand_type(token_seq[i].token_type)
                     , token_seq[i].value
                 ))
-            inst.operand2 = Operand(OperandType.ARGS, args)
+            inst.operand2 = Operand(OperandType.ARGS, Args(args))
 
         # print operand
         elif (

@@ -11,6 +11,7 @@ from ...ir import MIRInst
 
 class VisualBasicBlock(BasicBlock):
     def __init__(self, basic_block):
+        super().__init__(None, None)
         self.__dict__ = basic_block.__dict__
         self.width_pad = 60
         self.height_pad = 40
@@ -24,8 +25,8 @@ class VisualBasicBlock(BasicBlock):
         self.x = 0
         self.y = 0
 
-        self.rank = -1
-        self.preorder = -1
+        # self.rank = -1
+        # self.preorder = -1
 
         self.tree = None
 

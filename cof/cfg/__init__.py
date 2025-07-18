@@ -9,6 +9,11 @@ class ControlFlowGraph:
         # Instruction List
         self.insts: MIRInsts = insts
 
+        self.insts_dict_by_id: Dict[int, MIRInst] = \
+            {inst.id: inst for inst in self.insts.ret_insts()}
+
+        self.inst_id_to_block: Dict[int, BasicBlock] = { }
+
         # The root of the cfg
         self.root: Optional[BasicBlock, None] = None
         # The number of basic blocks
@@ -19,10 +24,10 @@ class ControlFlowGraph:
         # [(src_id, dst_id), (src_Id, dst_id)]
         self.edges: List[Tuple] = []
 
-        # predecessors
-        self.pred = defaultdict(list)
-        # successors
-        self.succ = defaultdict(list)
+        # direct predecessor nodes
+        self.pred: Dict[int, List[int]] = defaultdict(list)
+        # direct successor nodes
+        self.succ: Dict[int, List[int]] = defaultdict(list)
         # dominators
         self.dom: Dict[int, set] = {}
         # immediate dominators
@@ -34,149 +39,15 @@ class ControlFlowGraph:
         self.df: Dict[int, set] = {}
         self.dfp: set = set()
 
-        self.__built__()
+        self.ranks: Dict[int, int] = { }
+        self.max_rank: int = -1
 
-    def dom_front(self):
-        """
-        Dominance Frontier
-        :return:
-        """
-        df: Dict[int, set] = { i: set() for i in range(self.n_bbs)}
 
-        for i in self.post_order:
-            # Compute local component
-            for y in self.succ[i]:
-                if self.idom[y] != i:
-                    df[i] |= {y}
-            # Add on up component
-            z = self.idom[i]
-            if z != -1:
-                for y in df[z]:
-                    if y != self.idom[i]:
-                        df[i] |= {y}
-        self.df = df
-
-    def df_plus(self, sn):
-        """
-        iterated dominance frontier DF+()
-        :param sn:
-        :return:
-        """
-
-        def df_set(s: set):
-            dn = set()
-            for x in s:
-                dn |= self.df[x]
-            return dn
-
-        # d: set = set()
-        change = True
-        self.dfp = df_set(sn)
-        while change:
-            change = False
-            d = df_set(sn | self.dfp)
-            if d != self.dfp:
-                self.dfp = d
-                change = True
-
-    def post_order_comp(self):
-        """
-        Post-Order
-        :return:
-        """
-
-        # build children map from idom
-        children = defaultdict(list)
-        for node in self.block_id_set:
-            parent = self.idom[node]
-            if parent != -1:
-                children[parent].append(node)
-
-        root = self.root.id
-
-        # iterative post-order traversal
-        stack = [(root, False)]
-        visited = set()
-
-        while stack:
-            node, is_visited = stack.pop()
-            if is_visited:
-                self.post_order.append(node)
-                continue
-            if node in visited:
-                continue
-            visited.add(node)
-            stack.append((node, True))
-
-            for child in reversed(children[node]):
-                stack.append((child, False))
-
-    def dom_comp(self):
-        """
-        A simple approach to computing all the dominators of each node in a flowgraph.
-        :return:
-        """
-
-        # dominators
-        self.dom: Dict[int, set] = {i: set() for i in range(self.n_bbs)}
-
-        # The algorithm first initializes change = True,
-        change = True
-        # dominators[root_id] = { root_id }
-        root_id = self.root.id
-        self.dom[root_id].add(root_id)
-        # and dominators[i] = { all vertex ids } for each vertex i other than root.
-        for n in self.block_id_set - {root_id}:
-            self.dom[n].update(self.block_id_set)
-
-        while change:
-            change = False
-
-            for n in self.block_id_set - {root_id}:
-                tmp_dominator_set = set(self.block_id_set)
-
-                # For first iteration, p is root_id ( the only member of Pred(B1) )
-                # and so set tmp_dominator_set = { root_id }
-                for p in self.pred[n]:
-                    tmp_dominator_set &= self.dom[p]
-
-                dominator_set = { n } | tmp_dominator_set
-                if dominator_set != self.dom[n]:
-                    change = True
-                    self.dom[n] = dominator_set
-
-    def idom_comp(self):
-        """
-        In essence, the algorithm first sets tmp[i] to dom[i] - { i }
-        and then checks for each vertex i whether each element in tmp[i]
-        has dominators other than itself and, if so, remove them from tmp[i].
-        :return:
-        """
-
-        # immediate dominators
-        self.idom: Dict[int, int] = {i: -1 for i in range(self.n_bbs)}
-
-        root_id = self.root.id
-        tmp = {i: set() for i in range(self.n_bbs)}
-        new_tmp = {i: set() for i in range(self.n_bbs)}
-
-        for n in self.block_id_set:
-            tmp[n] = self.dom[n] - { n }
-            new_tmp[n] = self.dom[n] - { n }
-
-        for n in self.block_id_set - {root_id}:
-            for s in tmp[n]:
-                for t in tmp[n] - { s }:
-                    if t in tmp[s]:
-                        new_tmp[n] -= { t }
-
-        for n in self.block_id_set - {root_id}:
-            self.idom[n] = random.choice(list(new_tmp[n]))
-
+    # ++++++++ Initialization ++++++++
     def construct_cfg(self):
 
         # The Set type guarantees that there are no identical elements.
-        leaders_set = set()
+        leaders_set_by_addr = set()
 
         for inst_idx in range(0, self.insts.num):
             inst = self.insts.ir_insts[inst_idx]
@@ -184,39 +55,35 @@ class ControlFlowGraph:
             match inst.op:
 
                 case Op.ENTRY:
-                    leaders_set.add(inst_idx)
-                    leaders_set.add(inst_idx + 1)
+                    leaders_set_by_addr.add(inst_idx)
+                    leaders_set_by_addr.add(inst_idx + 1)
 
                 case Op.EXIT:
-                    leaders_set.add(inst_idx)
+                    leaders_set_by_addr.add(inst_idx)
 
                 case Op.IF:
-                    leaders_set.add(inst_idx + 1)
+                    leaders_set_by_addr.add(inst_idx + 1)
                     assert inst.result.type == OperandType.ADDR
                     target = int(inst.result.value)
-                    leaders_set.add(target)
+                    leaders_set_by_addr.add(target)
 
                 case Op.GOTO:
-                    leaders_set.add(inst_idx + 1)
+                    leaders_set_by_addr.add(inst_idx + 1)
                     assert inst.result.type == OperandType.ADDR
                     target = int(inst.result.value)
-                    leaders_set.add(target)
+                    leaders_set_by_addr.add(target)
 
         # Constructing Basic Blocks and updating class members
-        sorted_list = sorted(leaders_set)
+        sorted_list = sorted(leaders_set_by_addr)
         for leader_idx in range(0, len(sorted_list) - 1):
-            bb_id = self.n_bbs
-            src_vertex = BasicBlock(bb_id, self.insts.ret_insts_by_pos(sorted_list[leader_idx], sorted_list[leader_idx+1]))
-            self.blocks[bb_id] = src_vertex
-            self.block_id_set.add(bb_id)
-            self.n_bbs += 1
+
+            block_insts: List[MIRInst] = \
+                self.insts.ret_insts_by_pos(sorted_list[leader_idx], sorted_list[leader_idx+1])
+            self.new_a_block(self.n_bbs, block_insts)
 
         # Construct the exit basic block
-        bb_id = self.n_bbs
-        src_vertex = BasicBlock(bb_id, self.insts.ret_insts_by_pos(sorted_list[-1], self.insts.num))
-        self.blocks[bb_id] = src_vertex
-        self.block_id_set.add(bb_id)
-        self.n_bbs += 1
+        block_insts: List[MIRInst] = self.insts.ret_insts_by_pos(sorted_list[-1], self.insts.num)
+        self.new_a_block(self.n_bbs, block_insts)
 
         self.root = self.blocks[0]
 
@@ -262,9 +129,9 @@ class ControlFlowGraph:
                     src_vertex.ordered_succ_bbs.append(dst_vertex.id)
                     self.edges.append((src_vertex.id, dst_vertex.id))
 
-        for (src, dst) in self.edges:
-            self.succ[src].append(dst)
-            self.pred[dst].append(src)
+        for (src_id, dst_id) in self.edges:
+            self.succ[src_id].append(dst_id)
+            self.pred[dst_id].append(src_id)
 
         # Add predecessors and successors for all basic blocks.
         # iterate all vertices
@@ -275,7 +142,156 @@ class ControlFlowGraph:
             # get all successors from self.successors[k]
             for n in self.succ[k]:
                 v.succ_bbs[n] = self.blocks[n]
+    def assign_ranks(self):
+        """
+        Depth First Search to assign rank for every block.
+        :return:
+        """
 
+        # initialize
+        for block in self.blocks.values():
+            self.ranks[block.id] = -1
+
+
+        preorder = 0
+
+        # Preorder traversal
+        queue = deque([self.root])
+        self.ranks[self.root.id] = 0
+        # self.block_preorder[0].append(self.root)
+        self.root.rank = 0
+        self.root.preorder = preorder
+
+        while queue:
+
+            # FIFO
+            current_vbb = queue.popleft()
+            current_rank = self.ranks[current_vbb.id]
+
+            match current_vbb.branch_type:
+                case BasicBlockBranchType.jump:
+
+                    if not current_vbb.ordered_succ_bbs:
+                        continue
+
+                    next_vbb = self.blocks[current_vbb.ordered_succ_bbs[0]]
+                    next_rank = current_rank + 1
+                    if self.ranks[next_vbb.id] < 0 or self.ranks[next_vbb.id] > next_rank:
+
+                        preorder += 1
+                        next_vbb.rank = next_rank
+                        next_vbb.preorder = preorder
+
+                        self.ranks[next_vbb.id] = next_rank
+                        # add the visual basic block into block_order dict
+                        # self.block_preorder[next_rank].append(next_vbb)
+                        queue.append(next_vbb)
+
+                case BasicBlockBranchType.cond:
+                    true_br_vbb = self.blocks[current_vbb.ordered_succ_bbs[0]]
+                    false_br_vbb = self.blocks[current_vbb.ordered_succ_bbs[1]]
+                    next_rank = current_rank + 1
+
+                    # guarantee the first element of block order is false condition branch target vbb
+                    if self.ranks[false_br_vbb.id] < 0 or self.ranks[false_br_vbb.id] > next_rank:
+
+                        preorder += 1
+                        false_br_vbb.rank = next_rank
+                        false_br_vbb.preorder = preorder
+
+                        self.ranks[false_br_vbb.id] = next_rank
+                        # self.block_preorder[next_rank].append(false_br_vbb)
+                        queue.append(false_br_vbb)
+
+                    if self.ranks[true_br_vbb.id] < 0 or self.ranks[true_br_vbb.id] > next_rank:
+
+                        preorder += 1
+                        true_br_vbb.rank = next_rank
+                        true_br_vbb.preorder = preorder
+
+                        self.ranks[true_br_vbb.id] = next_rank
+                        # self.block_preorder[next_rank].append(true_br_vbb)
+                        queue.append(true_br_vbb)
+
+                case BasicBlockBranchType.switch:
+                    next_rank = current_rank + 1
+                    for vbb_id in current_vbb.ordered_succ_bbs:
+                        next_vbb = self.blocks[vbb_id]
+                        if self.ranks[next_vbb.id] < 0 or self.ranks[next_vbb.id] > next_rank:
+
+                            preorder += 1
+                            next_vbb.rank = next_rank
+                            next_vbb.preorder = preorder
+
+                            self.ranks[next_vbb.id] = next_rank
+                            # self.block_preorder[next_rank].append(next_vbb)
+                            queue.append(next_vbb)
+
+        # self.handle_loops()
+        self.max_rank = max(self.ranks.values())
+
+
+    # ++++++++ Compute ++++++++
+    def dom_comp(self):
+        """
+        A simple approach to computing all the dominators of each node in a flowgraph.
+        :return:
+        """
+
+        # dominators
+        self.dom: Dict[int, set] = {i: set() for i in range(self.n_bbs)}
+
+        # The algorithm first initializes change = True,
+        change = True
+        # dominators[root_id] = { root_id }
+        root_id = self.root.id
+        self.dom[root_id].add(root_id)
+        # and dominators[i] = { all vertex ids } for each vertex i other than root.
+        for n in self.block_id_set - {root_id}:
+            self.dom[n].update(self.block_id_set)
+
+        while change:
+            change = False
+
+            for n in self.block_id_set - {root_id}:
+                tmp_dominator_set = set(self.block_id_set)
+
+                # For first iteration, p is root_id ( the only member of Pred(B1) )
+                # and so set tmp_dominator_set = { root_id }
+                for p in self.pred[n]:
+                    tmp_dominator_set &= self.dom[p]
+
+                dominator_set = { n } | tmp_dominator_set
+                if dominator_set != self.dom[n]:
+                    change = True
+                    self.dom[n] = dominator_set
+    def idom_comp(self):
+        """
+        In essence, the algorithm first sets tmp[i] to dom[i] - { i }
+        and then checks for each vertex i whether each element in tmp[i]
+        has dominators other than itself and, if so, remove them from tmp[i].
+        :return:
+        """
+
+        # immediate dominators
+        self.idom: Dict[int, int] = {i: -1 for i in range(self.n_bbs)}
+
+        root_id = self.root.id
+        tmp = {i: set() for i in range(self.n_bbs)}
+        new_tmp = {i: set() for i in range(self.n_bbs)}
+
+        for n in self.block_id_set:
+            tmp[n] = self.dom[n] - { n }
+            new_tmp[n] = self.dom[n] - { n }
+
+        for n in self.block_id_set - {root_id}:
+            for s in tmp[n]:
+                for t in tmp[n] - { s }:
+                    if t in tmp[s]:
+                        new_tmp[n] -= { t }
+
+        for n in self.block_id_set - {root_id}:
+            self.idom[n] = random.choice(list(new_tmp[n]))
     def construct_dominator_tree(self):
         for child, parent in self.idom.items():
             child_bb: BasicBlock = self.blocks[child]
@@ -285,21 +301,95 @@ class ControlFlowGraph:
 
             parent_bb: BasicBlock = self.blocks[parent]
             parent_bb.dominator_tree_children_id.append(child_bb.id)
+    def post_order_comp(self):
+        """
+        Post-Order
+        :return:
+        """
 
+        # build children map from idom
+        children = defaultdict(list)
+        for node in self.block_id_set:
+            parent = self.idom[node]
+            if parent != -1:
+                children[parent].append(node)
+
+        root = self.root.id
+
+        # iterative post-order traversal
+        stack = [(root, False)]
+        visited = set()
+
+        while stack:
+            node, is_visited = stack.pop()
+            if is_visited:
+                self.post_order.append(node)
+                continue
+            if node in visited:
+                continue
+            visited.add(node)
+            stack.append((node, True))
+
+            for child in reversed(children[node]):
+                stack.append((child, False))
+
+
+    # ++++++++ SSA ++++++++
+    def dom_front(self):
+        """
+        Dominance Frontier
+        :return:
+        """
+        df: Dict[int, set] = { i: set() for i in range(self.n_bbs)}
+
+        for i in self.post_order:
+            # Compute local component
+            for y in self.succ[i]:
+                if self.idom[y] != i:
+                    df[i] |= {y}
+            # Add on up component
+            z = self.idom[i]
+            if z != -1:
+                for y in df[z]:
+                    if y != self.idom[i]:
+                        df[i] |= {y}
+        self.df = df
+    def df_plus(self, sn):
+        """
+        iterated dominance frontier DF+()
+        :param sn:
+        :return:
+        """
+
+        def df_set(s: set):
+            dn = set()
+            for x in s:
+                dn |= self.df[x]
+            return dn
+
+        # d: set = set()
+        change = True
+        self.dfp = df_set(sn)
+        while change:
+            change = False
+            d = df_set(sn | self.dfp)
+            if d != self.dfp:
+                self.dfp = d
+                change = True
     def minimal_ssa(self):
         variables: set[str] = set()
 
         # collect all variables.
         for inst in self.insts.ir_insts:
-            if is_assignment_inst(inst):
-                variables.add(str(get_assigned_var(inst)))
+            if inst.is_assignment():
+                variables.add(str(inst.get_assigned_var()))
 
         # record all blocks which defines variable
         def_sites: Dict[str, List] = {v: [] for v in variables}
         for block in self.blocks.values():
             for inst in block.insts.ret_insts():
-                if is_assignment_inst(inst):
-                    variable: Variable = get_assigned_var(inst)
+                if inst.is_assignment():
+                    variable: Variable = inst.get_assigned_var()
                     def_sites[str(variable)].append(block.id)
 
         # insert phi function for each variable
@@ -321,6 +411,7 @@ class ControlFlowGraph:
                     if not has_phi_for_var(self.blocks[y], varname):
                         # insert phi function as the first inst in y
                         new_phi = create_phi_function(varname, num_pred_s=len(self.pred[y]))
+                        self.add_new_inst(new_phi, self.blocks[y])
                         self.blocks[y].insts.add_phi_inst(new_phi)
 
                         # check if y is inserted for the first time, join into worklist.
@@ -329,7 +420,6 @@ class ControlFlowGraph:
                             worklist.append(y)
 
         self.rename_variables(def_sites, variables)
-
     def rename_variables(self, def_sites: Dict[str, List], variables: set[str]) -> None:
 
         # initialize version counters
@@ -359,7 +449,7 @@ class ControlFlowGraph:
                         operand.value = SSAVariable(operand.value, stacks[operand.value.varname][-1])
 
                 elif operand.type == OperandType.ARGS:
-                    for arg in operand.value:
+                    for arg in operand.value.args:
                         # if arg.type == OperandType.VAR:
                         if isinstance(arg.value, Variable):
                             if arg.value.varname in stacks:
@@ -411,8 +501,8 @@ class ControlFlowGraph:
                 rename_use_operand(inst_in_cbb.operand2)
 
                 # rename (def)
-                if is_assignment_inst(inst_in_cbb):
-                    v: Variable = get_assigned_var(inst_in_cbb)
+                if inst_in_cbb.is_assignment():
+                    v: Variable = inst_in_cbb.get_assigned_var()
                     counters[v.varname] += 1
                     new_ver = counters[v.varname]
                     new_var = SSAVariable(v, new_ver)
@@ -456,7 +546,7 @@ class ControlFlowGraph:
             # 6
             # pop up the current scope version when backtracking
             for inst_in_cbb in reversed(block_para.insts.ret_ordinary_insts()):
-                if is_assignment_inst(inst_in_cbb):
+                if inst_in_cbb.is_assignment():
                     if isinstance(inst_in_cbb.result.value, Variable):
                         result: Variable = inst_in_cbb.result.value
                         varname = result.varname
@@ -498,21 +588,95 @@ class ControlFlowGraph:
                     version = phi_data[base_varname][pred_index]
                     phi_arg_var: SSAVariable = phi_args.args[index].value
                     phi_arg_var.version = version
+    def ssa_edges_comp(self):
+        """
+        Note:
+            Must be guaranteed that all variables have been converted to SSAVariable form before
+            calling this routine.
+        :return:
+        """
+        edges: List[SSAEdge] = [ ]
+        def_sites: Dict[str, int] = { } # var_name -> MIRInst.id
+        phi_sources = defaultdict(list) # phi_inst_id -> original definition list
+
+        # stage 1.
+        # collect all definition.
+        for block in self.blocks.values():
+            for inst in block.insts.ret_ordinary_insts():
+                if inst.is_assignment():
+                    var: SSAVariable = inst.result.value
+                    def_sites[str(var)] = inst.id
+
+            for phi_inst in block.insts.ret_phi_insts():
+                var: SSAVariable = phi_inst.result.value
+                def_sites[str(var)] = phi_inst.id
+                phi_sources[phi_inst.id] = []
+
+        # stage 2.
+        # connect common use.
+        for block in self.blocks.values():
+            for inst in block.insts.ret_ordinary_insts():
+                operand_list = inst.ret_operand_list()
+                for operand in operand_list:
+                    if isinstance(operand.value, SSAVariable) and operand.value.base_name in def_sites:
+                        src_inst_id = def_sites[str(operand.value)]
+                        edges.append(SSAEdge(src_inst_id, inst.id, operand.value.base_name))
+
+        # stage 3.
+        for block in self.blocks.values():
+            for phi in block.insts.ret_phi_insts():
+                predecessor_id_list = self.pred[block.id]
+
+                for i, operand in enumerate(phi.ret_operand_list()):
+                    assert isinstance(operand.value, SSAVariable)
+                    ssa_name = str(operand.value)
+                    if ssa_name in def_sites:
+                        src_inst_id = def_sites[ssa_name]
+                        # find block which has defined the var.
+                        src_block = self.find_defining_block(src_inst_id)
+
+                        if src_block and src_block.id in predecessor_id_list:
+                            edges.append(SSAEdge(src_inst_id, phi.id, ssa_name))
 
 
+    # ++++++++ Management ++++++++
+    def new_a_block(self, bb_id: int, block_insts: List[MIRInst]):
+        src_vertex = BasicBlock(bb_id, block_insts)
+        self.inst_id_to_block = \
+            {inst.id: src_vertex for inst in block_insts}
+        self.blocks[bb_id] = src_vertex
+        self.block_id_set.add(bb_id)
+        self.n_bbs += 1
+    def find_defining_block(self, inst: Union[int, MIRInst]) -> Optional[BasicBlock]:
+        if isinstance(inst, int):
+            for block in self.blocks.values():
+                if block.insts.inst_exist_by_id(inst):
+                    return block
+        elif isinstance(inst, MIRInst):
+            for block in self.blocks.values():
+                if block.insts.inst_exist(inst):
+                    return block
+        return None
+    def add_new_inst(self, inst: MIRInst, block: BasicBlock):
+        self.insts.insert_insts(-1, inst)
+        self.insts_dict_by_id[inst.id] = inst
+        self.inst_id_to_block[inst.id] = block
     def print_dom_tree(self, block: BasicBlock):
         print(", ".join(map(str, block.dominator_tree_children_id)) + '\t\t\t')
         for child_id in block.dominator_tree_children_id:
             self.print_dom_tree(self.blocks[child_id])
 
+
+
     def __built__(self):
+
         self.construct_cfg()
+        self.assign_ranks()
+
         self.dom_comp()
         self.idom_comp()
         self.construct_dominator_tree()
         self.post_order_comp()
+
         self.dom_front()
         self.df_plus(self.block_id_set)
-        # self.print_dom_tree(self.root)
-        self.minimal_ssa()
-

@@ -1,6 +1,11 @@
 from enum import Enum
 from typing import List, Optional, Union
 
+mir_inst_id = 0
+def new_id() -> int:
+    global mir_inst_id
+    mir_inst_id += 1
+    return mir_inst_id
 
 class OperandType(Enum):
 
@@ -17,7 +22,6 @@ class OperandType(Enum):
     ARGS = 40
 
     UNKNOWN = 99
-
 
 class Op(Enum):
     ADD = 1
@@ -88,7 +92,6 @@ class Variable:
 class Args:
     def __init__(self, args: List):
         self.args = args
-
     def __repr__(self):
         return ', '.join(map(str, self.args))
 
@@ -114,20 +117,19 @@ class Operand:
         return str(self.value)
 
 class MIRInst:
-    """
-    a = b + c: (op=ADD, operand1=b, operand2=c, result=a)
-    m = max(b, c): (op=CALL,
-                    operand1=max,
-                    operand2=Args([Operand(OperandType.VAR, b), Operand(OperandType.VAR, c)]),
-                    result=m)
-
-    """
     def __init__(self, **kwargs):
+        self.id = new_id()
+
         self.addr = kwargs['addr']
         self.op = kwargs['op']
         self.operand1: Operand = kwargs['operand1']
         self.operand2: Operand = kwargs['operand2']
         self.result: Operand = kwargs['result']
+
+    def __eq__(self, other):
+        if not isinstance(other, MIRInst):
+            return False
+        return self.id == other.id
 
     def __repr__(self):
         formatter = {
@@ -182,12 +184,42 @@ class MIRInst:
     def _val(self, operand: Operand):
         return "" if operand is None else str(operand)
 
-def is_assignment_inst(inst: MIRInst) -> bool:
-    return True if inst.op in Assignment_Op else False
 
-def get_assigned_var(inst: MIRInst) -> Variable:
-    assert inst.result.type == OperandType.VAR
-    return inst.result.value
+    def is_assignment(self) -> bool:
+        return True if self.op in Assignment_Op else False
+    def is_if(self) -> bool:
+        return True if self.op == Op.IF else False
+    def is_call(self) -> bool:
+        return True if self.op == Op.CALL else False
+    def is_phi(self) -> bool:
+        return True if self.op == Op.PHI else False
+    def get_assigned_var(self) -> Variable:
+        assert self.result.type == OperandType.VAR
+        return self.result.value
+    def get_call_arg_list(self) -> List[Operand]:
+        assert self.op == Op.CALL or self.op == Op.PHI
+        assert self.operand2.type == OperandType.ARGS
+        return self.operand2.value.args
+
+    def ret_operand_list(self) -> List[Operand]:
+        l: List[Operand] = []
+        if self.is_assignment():
+            l.append(self.result)
+            l.append(self.operand1)
+            if self.operand2:
+                l.append(self.operand2)
+
+        elif self.is_call():
+            l = self.get_call_arg_list()
+
+        elif self.is_if():
+            l.append(self.operand1)
+
+        elif self.is_phi():
+            l = self.get_call_arg_list()
+
+        return l
+
 
 
 class MIRInsts:
@@ -200,6 +232,18 @@ class MIRInsts:
             self.num: int = 0
 
         self.phi_insts_idx_end: int = 0
+
+    def inst_exist(self, inst: MIRInst) -> bool:
+        for i in self.ret_insts():
+            if i == inst:
+                return True
+        return False
+
+    def inst_exist_by_id(self, inst_id: int) -> bool:
+        for i in self.ret_insts():
+            if i.id == inst_id:
+                return True
+        return False
 
     def inst_exist_by_addr(self, addr: int) -> bool:
         for inst in self.ret_insts():

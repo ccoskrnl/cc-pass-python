@@ -14,6 +14,8 @@ class CFGVisualizer(QMainWindow):
     def __init__(self, cfg: ControlFlowGraph):
         super().__init__()
 
+        self.cfg = cfg
+
         self.edge_items = { }
         self.block_items = { }
         self.font_combo = None
@@ -90,7 +92,7 @@ class CFGVisualizer(QMainWindow):
 
     def create_cfg(self):
 
-        self.layout_engine = CFGLayout(self.entry_block, self.blocks)
+        self.layout_engine = CFGLayout(self.cfg, self.entry_block, self.blocks)
         self.layout_engine.set_font(
             self.block_color,
             self.title_font,
@@ -107,7 +109,7 @@ class CFGVisualizer(QMainWindow):
 
         # visualize edge
         for block in self.blocks.values():
-            for succ in block.succ_bbs.values():
+            for succ in block.succ_vbbs:
                 self.create_edge(block, succ)
 
     def visualize_tree(self, node: Tree):

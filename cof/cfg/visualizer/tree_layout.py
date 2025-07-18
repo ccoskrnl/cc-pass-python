@@ -1,9 +1,9 @@
 import bisect
-from collections import deque, defaultdict
+from collections import deque
 from typing import Dict, Set
 
-from ..bb import BasicBlockBranchType
 from .vbb import VisualBasicBlock
+from .. import ControlFlowGraph
 
 TITLE_GAP = 5
 CONTENT_GAP = 1
@@ -136,7 +136,7 @@ class Tree:
 
 class IYL:
     """Indexed Y List"""
-    def __init__(self, low_y, index, next):
+    def __init__(self, low_y, index, next_node):
         # 当前子树的最低Y坐标
         self.lowY = low_y
 
@@ -144,7 +144,7 @@ class IYL:
         self.index = index
 
         # 下一个IYL节点
-        self.next = next
+        self.next = next_node
 
 def update_IYL(min_y, i, ih=None) -> IYL:
     """当添加新子树时，移除所有被新子树完全遮挡的左侧兄弟"""
@@ -282,8 +282,7 @@ class TreeLayout:
 
 
 class CFGLayout:
-    def __init__(self, entry_block: VisualBasicBlock, blocks: Dict):
-        self.max_rank = None
+    def __init__(self, cfg: ControlFlowGraph, entry_block: VisualBasicBlock, blocks: Dict):
         self.block_color = None
         self.title_font = None
         self.title_font_color = None
@@ -294,13 +293,15 @@ class CFGLayout:
 
         self.entry_block: VisualBasicBlock = entry_block
         self.blocks: Dict[int, VisualBasicBlock] = blocks
-        self.ranks: Dict[int, int] = { }
+
+        self.max_rank = cfg.max_rank
+        self.ranks: Dict[int, int] = cfg.ranks
 
         self.tree_layout = None
         self.root = None
 
         # a dict, key is rank, value is a list[VisualBasicBlock]
-        self.block_preorder = defaultdict(list)
+        # self.block_preorder = defaultdict(list)
         # self.positions: Dict = { }
 
     def calculate_block_size(self, block: VisualBasicBlock):
@@ -330,90 +331,6 @@ class CFGLayout:
         block.width = max_width + BLOCK_PAINT_WIDTH_PAD
         block.padded_height = block.height + block.height_pad * 2
         block.padded_width = block.width + block.width_pad * 2
-
-    def assign_ranks(self):
-
-        # initialize
-        for block in self.blocks.values():
-            self.ranks[block.id] = -1
-
-
-        preorder = 0
-
-        # Preorder traversal
-        queue = deque([self.entry_block])
-        self.ranks[self.entry_block.id] = 0
-        self.block_preorder[0].append(self.entry_block)
-        self.entry_block.rank = 0
-        self.entry_block.preorder = preorder
-
-        while queue:
-
-            # FIFO
-            current_vbb = queue.popleft()
-            current_rank = self.ranks[current_vbb.id]
-
-            match current_vbb.branch_type:
-                case BasicBlockBranchType.jump:
-
-                    if not current_vbb.ordered_succ_bbs:
-                        continue
-
-                    next_vbb = self.blocks[current_vbb.ordered_succ_bbs[0]]
-                    next_rank = current_rank + 1
-                    if self.ranks[next_vbb.id] < 0 or self.ranks[next_vbb.id] > next_rank:
-
-                        preorder += 1
-                        next_vbb.rank = next_rank
-                        next_vbb.preorder = preorder
-
-                        self.ranks[next_vbb.id] = next_rank
-                        # add the visual basic block into block_order dict
-                        self.block_preorder[next_rank].append(next_vbb)
-                        queue.append(next_vbb)
-
-                case BasicBlockBranchType.cond:
-                    true_br_vbb = self.blocks[current_vbb.ordered_succ_bbs[0]]
-                    false_br_vbb = self.blocks[current_vbb.ordered_succ_bbs[1]]
-                    next_rank = current_rank + 1
-
-                    # guarantee the first element of block order is false condition branch target vbb
-                    if self.ranks[false_br_vbb.id] < 0 or self.ranks[false_br_vbb.id] > next_rank:
-
-                        preorder += 1
-                        false_br_vbb.rank = next_rank
-                        false_br_vbb.preorder = preorder
-
-                        self.ranks[false_br_vbb.id] = next_rank
-                        self.block_preorder[next_rank].append(false_br_vbb)
-                        queue.append(false_br_vbb)
-
-                    if self.ranks[true_br_vbb.id] < 0 or self.ranks[true_br_vbb.id] > next_rank:
-
-                        preorder += 1
-                        true_br_vbb.rank = next_rank
-                        true_br_vbb.preorder = preorder
-
-                        self.ranks[true_br_vbb.id] = next_rank
-                        self.block_preorder[next_rank].append(true_br_vbb)
-                        queue.append(true_br_vbb)
-
-                case BasicBlockBranchType.switch:
-                    next_rank = current_rank + 1
-                    for vbb_id in current_vbb.ordered_succ_bbs:
-                        next_vbb = self.blocks[vbb_id]
-                        if self.ranks[next_vbb.id] < 0 or self.ranks[next_vbb.id] > next_rank:
-
-                            preorder += 1
-                            next_vbb.rank = next_rank
-                            next_vbb.preorder = preorder
-
-                            self.ranks[next_vbb.id] = next_rank
-                            self.block_preorder[next_rank].append(next_vbb)
-                            queue.append(next_vbb)
-
-        # self.handle_loops()
-        self.max_rank = max(self.ranks.values())
 
     def handle_loops(self):
         """Handle loop structure layer"""
@@ -454,7 +371,7 @@ class CFGLayout:
         for block in self.blocks.values():
             self.calculate_block_size(block)
 
-        self.assign_ranks()
+        # self.assign_ranks()
 
     def layout(self):
         root = Tree(self.entry_block, self.entry_block.padded_width, self.entry_block.padded_height)

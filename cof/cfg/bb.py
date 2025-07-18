@@ -1,6 +1,6 @@
 from collections import defaultdict
 from enum import Enum
-from typing import List
+from typing import List, Optional, Dict
 from ..ir import MIRInsts, Variable, Op, MIRInst
 
 
@@ -17,22 +17,30 @@ class BasicBlockBranchType(Enum):
 
 
 class BasicBlock:
-    def __init__(self, bb_id: int, insts: List[MIRInst]):
+    def __init__(self, bb_id: Optional[int], insts: Optional[List[MIRInst]]):
     # def __init__(self, bb_id: int, start_idx: int, end_idx: int, insts: MIRInsts):
 
         # self.inst_idx_list: List[int] = [i for i in range(start_idx, end_idx)]
         # self.insts: List[IRInst] = insts.ir_insts[start_idx: end_idx]
-        self.insts: MIRInsts = MIRInsts(insts)
         # self.phi_insts_idx_end = 0
+        if insts:
+            self.insts: Optional[MIRInsts] = MIRInsts(insts)
+            self.tag: str = "B" + str(bb_id) + "[addr " + str(self.insts.ret_inst_by_idx(-1).addr) + "]"
+        else:
+            self.insts: Optional[MIRInsts] = None
+            self.tag: str = ""
+
 
         # self.num_of_insts = (end_idx - start_idx)
-        self.id = bb_id
+        self.id: int = bb_id if isinstance(bb_id, int) else -1
 
-        self.comment = ""
-
-        self.tag = "B" + str(bb_id) + "[addr " + str(self.insts.ret_inst_by_idx(-1).addr) + "]"
+        self.comment: str = ""
 
         self.branch_type: BasicBlockBranchType = BasicBlockBranchType.jump
+
+        self.preorder: int = -1
+        self.rank: int = -1
+
         # 1. if the branch_type is jump,
         # then the ordered_suc_bbs only has one element, the next bb id.
         # 2. if the branch_type is cond,
@@ -42,14 +50,14 @@ class BasicBlock:
         # then the ordered_succ_bbs has more than two elements.
         self.ordered_succ_bbs: list[int] = []
 
-        self.pred_bbs = defaultdict(list)
-        self.succ_bbs = defaultdict(list)
+        self.pred_bbs: Dict[int, 'BasicBlock'] = { }
+        self.succ_bbs: Dict[int, 'BasicBlock'] = { }
 
-        self.dominator_tree_parent = None
-        self.dominator_tree_children_id: List = [ ]
+        self.dominator_tree_parent: Optional['BasicBlock'] = None
+        self.dominator_tree_children_id: List[int] = [ ]
 
 
-    def add_comment(self, comment: str):
+    def add_comment(self, comment: str) -> None:
         self.comment = comment
 
     # def add_insts(self, start_index, end_index):
