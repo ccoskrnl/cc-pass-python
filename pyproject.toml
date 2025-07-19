@@ -3,7 +3,7 @@ name = "co"
 version = "0.1.0"
 description = ""
 authors = [
-    {name = "Your Name",email = "you@example.com"}
+    {name = "ChengCheng",email = "2010705797@qq.com"}
 ]
 readme = "README.md"
 requires-python = ">=3.13"
@@ -19,8 +19,8 @@ package-mode = false
 requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"
 
-[[tool.poetry.source]]
-name = "mirrors"
-url = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple/"
-priority = "primary"
+#[[tool.poetry.source]]
+#name = "mirrors"
+#url = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple/"
+#priority = "primary"
 

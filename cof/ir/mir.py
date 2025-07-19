@@ -46,6 +46,7 @@ class Op(Enum):
     PHI = 77
 
     CALL = 90
+    CALL_ASSIGN = 91
 
     PRINT = 96
     ENTRY = 97
@@ -53,10 +54,20 @@ class Op(Enum):
 
     UNKNOWN = 99
 
+# All evaluatable expressions.
+Exp_Op = {
+    Op.ADD, Op.SUB, Op.MUL, Op.DIV,
+    Op.ASSIGN,
+    Op.LEQ, Op.GEQ, Op.LE, Op.GE, Op.EQ, Op.NEQ,
+    Op.IF
+}
+
+# All operators with assignment operation
 Assignment_Op = {
     Op.ADD, Op.SUB, Op.MUL, Op.DIV,
     Op.ASSIGN,
-    Op.LEQ, Op.GEQ, Op.LE, Op.GE, Op.EQ, Op.NEQ
+    Op.LEQ, Op.GEQ, Op.LE, Op.GE, Op.EQ, Op.NEQ,
+    Op.PHI, Op.CALL_ASSIGN
 }
 
 OP_STR_MAP = {
@@ -118,6 +129,11 @@ class Operand:
     def _format_const(self):
         return str(self.value)
 
+
+def _val(operand: Operand):
+    return "" if operand is None else str(operand)
+
+
 class MIRInst:
     def __init__(self, **kwargs):
         self.id: MIRInstId = new_id()
@@ -148,77 +164,88 @@ class MIRInst:
         return formatter()
 
     def _format_branch(self):
-        return f"if {self._val(self.operand1)} goto addr_{self._val(self.result)}"
+        return f"if {_val(self.operand1)} goto addr_{_val(self.result)}"
     def _format_jump(self):
-        return f"goto addr_{self._val(self.result)}"
+        return f"goto addr_{_val(self.result)}"
     def _format_assign(self):
-        return f"{self._val(self.result)} := {self._val(self.operand1)}"
+        return f"{_val(self.result)} := {_val(self.operand1)}"
     def _format_entry_exit(self):
         return op_str(self.op)
     def _format_print(self):
-        return f"print {self._val(self.operand1)}"
+        return f"print {_val(self.operand1)}"
     def _format_operator(self):
         op_symbol = op_str(self.op)
         return (
-            f"{self._val(self.result)} := "
-            f"{self._val(self.operand1)} "
-            f"{op_symbol} {self._val(self.operand2)}"
+            f"{_val(self.result)} := "
+            f"{_val(self.operand1)} "
+            f"{op_symbol} {_val(self.operand2)}"
         )
     def _format_call(self):
         if self.result:
             return (
-                f"{self._val(self.result)} := "
-                f"{self._val(self.operand1)}("
-                f"{self._val(self.operand2)})"
+                f"{_val(self.result)} := "
+                f"{_val(self.operand1)}("
+                f"{_val(self.operand2)})"
             )
         else:
             return (
-                f"{self._val(self.operand1)}("
-                f"{self._val(self.operand2)})"
+                f"{_val(self.operand1)}("
+                f"{_val(self.operand2)})"
             )
     def _format_phi(self):
         return (
-            f"{self._val(self.result)} := "
-            f"{self._val(self.operand1)}("
-            f"{self._val(self.operand2)})"
+            f"{_val(self.result)} := "
+            f"{_val(self.operand1)}("
+            f"{_val(self.operand2)})"
         )
 
-    def _val(self, operand: Operand):
-        return "" if operand is None else str(operand)
-
-
+    def is_evaluatable(self) -> bool:
+        return True if self.op in Exp_Op else False
     def is_assignment(self) -> bool:
         return True if self.op in Assignment_Op else False
     def is_if(self) -> bool:
         return True if self.op == Op.IF else False
     def is_call(self) -> bool:
-        return True if self.op == Op.CALL else False
+        return True if self.op == Op.CALL or self.op == Op.CALL_ASSIGN else False
     def is_phi(self) -> bool:
         return True if self.op == Op.PHI else False
-    def get_assigned_var(self) -> Variable:
-        assert self.result.type == OperandType.VAR
-        return self.result.value
+    def get_assigned_var(self) -> Optional[Variable]:
+        # assert self.result.type == OperandType.VAR
+        return self.result.value if self.result else None
+
     def get_call_arg_list(self) -> List[Operand]:
         assert self.op == Op.CALL or self.op == Op.PHI
         assert self.operand2.type == OperandType.ARGS
         return self.operand2.value.args
 
-    def ret_operand_list(self) -> List[Operand]:
+    def ret_operand_list_of_exp(self) -> List[Operand]:
         l: List[Operand] = []
         if self.is_assignment():
-            l.append(self.result)
             l.append(self.operand1)
             if self.operand2:
                 l.append(self.operand2)
 
-        elif self.is_call():
-            l = self.get_call_arg_list()
-
         elif self.is_if():
             l.append(self.operand1)
 
-        elif self.is_phi():
+        return l
+
+    def ret_operand_list(self) -> List[Operand]:
+        l: List[Operand] = []
+
+        if self.is_phi():
             l = self.get_call_arg_list()
+
+        elif self.is_call():
+            l = self.get_call_arg_list()
+
+        elif self.is_assignment():
+            l.append(self.operand1)
+            if self.operand2:
+                l.append(self.operand2)
+
+        elif self.is_if():
+            l.append(self.operand1)
 
         return l
 

@@ -1,9 +1,10 @@
 import random
-from collections import deque, defaultdict
+from collections import deque
 from typing import Tuple
 
 from .bb import *
-from cof.analysis.ssa import *
+from ..analysis.ssa import *
+from ..ir.mir import *
 
 
 class ControlFlowGraph:
@@ -14,14 +15,14 @@ class ControlFlowGraph:
         self.insts_dict_by_id: Dict[MIRInstId, MIRInst] = \
             {inst.id: inst for inst in self.insts.ret_insts()}
 
-        self.inst_id_to_block: Dict[BasicBlockId, BasicBlock] = { }
+        self.inst_id_to_block: Dict[BasicBlockId, BasicBlock] = {}
 
         # The root of the cfg
         self.root: Optional[BasicBlock, None] = None
         # The number of basic blocks
         self.n_bbs: int = 0
         self.block_id_set: set[BasicBlockId] = set()
-        self.blocks: Dict[BasicBlockId, BasicBlock] = { }
+        self.blocks: Dict[BasicBlockId, BasicBlock] = {}
 
         # [(src_id, dst_id), (src_Id, dst_id)]
         self.edges: List[Tuple[BasicBlockId, BasicBlockId]] = []
@@ -35,16 +36,15 @@ class ControlFlowGraph:
         # immediate dominators
         self.idom: Dict[BasicBlockId, BasicBlockId] = {}
 
-        self.post_order: List[BasicBlockId] = [ ]
+        self.post_order: List[BasicBlockId] = []
 
         # Dominance Frontier
         self.df: Dict[BasicBlockId, set] = {}
         # Dominance Frontier Plus
         self.dfp: set = set()
 
-        self.ranks: Dict[int, int] = { }
+        self.ranks: Dict[int, int] = {}
         self.max_rank: int = -1
-
 
     # ++++++++ Initialization ++++++++
     def construct_cfg(self):
@@ -79,9 +79,8 @@ class ControlFlowGraph:
         # Constructing Basic Blocks and updating class members
         sorted_list = sorted(leaders_set_by_addr)
         for leader_idx in range(0, len(sorted_list) - 1):
-
             block_insts: List[MIRInst] = \
-                self.insts.ret_insts_by_pos(sorted_list[leader_idx], sorted_list[leader_idx+1])
+                self.insts.ret_insts_by_pos(sorted_list[leader_idx], sorted_list[leader_idx + 1])
             self.new_a_block(self.n_bbs, block_insts)
 
         # Construct the exit basic block
@@ -145,6 +144,7 @@ class ControlFlowGraph:
             # get all successors from self.successors[k]
             for n in self.succ[k]:
                 v.succ_bbs[n] = self.blocks[n]
+
     def assign_ranks(self):
         """
         Depth First Search to assign rank for every block.
@@ -154,7 +154,6 @@ class ControlFlowGraph:
         # initialize
         for block in self.blocks.values():
             self.ranks[block.id] = -1
-
 
         preorder = 0
 
@@ -180,7 +179,6 @@ class ControlFlowGraph:
                     next_vbb = self.blocks[current_vbb.ordered_succ_bbs[0]]
                     next_rank = current_rank + 1
                     if self.ranks[next_vbb.id] < 0 or self.ranks[next_vbb.id] > next_rank:
-
                         preorder += 1
                         next_vbb.rank = next_rank
                         next_vbb.preorder = preorder
@@ -197,7 +195,6 @@ class ControlFlowGraph:
 
                     # guarantee the first element of block order is false condition branch target vbb
                     if self.ranks[false_br_vbb.id] < 0 or self.ranks[false_br_vbb.id] > next_rank:
-
                         preorder += 1
                         false_br_vbb.rank = next_rank
                         false_br_vbb.preorder = preorder
@@ -207,7 +204,6 @@ class ControlFlowGraph:
                         queue.append(false_br_vbb)
 
                     if self.ranks[true_br_vbb.id] < 0 or self.ranks[true_br_vbb.id] > next_rank:
-
                         preorder += 1
                         true_br_vbb.rank = next_rank
                         true_br_vbb.preorder = preorder
@@ -221,7 +217,6 @@ class ControlFlowGraph:
                     for vbb_id in current_vbb.ordered_succ_bbs:
                         next_vbb = self.blocks[vbb_id]
                         if self.ranks[next_vbb.id] < 0 or self.ranks[next_vbb.id] > next_rank:
-
                             preorder += 1
                             next_vbb.rank = next_rank
                             next_vbb.preorder = preorder
@@ -232,7 +227,6 @@ class ControlFlowGraph:
 
         # self.handle_loops()
         self.max_rank = max(self.ranks.values())
-
 
     # ++++++++ Compute ++++++++
     def dom_comp(self):
@@ -264,10 +258,11 @@ class ControlFlowGraph:
                 for p in self.pred[n]:
                     tmp_dominator_set &= self.dom[p]
 
-                dominator_set = { n } | tmp_dominator_set
+                dominator_set = {n} | tmp_dominator_set
                 if dominator_set != self.dom[n]:
                     change = True
                     self.dom[n] = dominator_set
+
     def idom_comp(self):
         """
         In essence, the algorithm first sets tmp[i] to dom[i] - { i }
@@ -284,17 +279,18 @@ class ControlFlowGraph:
         new_tmp = {i: set() for i in range(self.n_bbs)}
 
         for n in self.block_id_set:
-            tmp[n] = self.dom[n] - { n }
-            new_tmp[n] = self.dom[n] - { n }
+            tmp[n] = self.dom[n] - {n}
+            new_tmp[n] = self.dom[n] - {n}
 
         for n in self.block_id_set - {root_id}:
             for s in tmp[n]:
-                for t in tmp[n] - { s }:
+                for t in tmp[n] - {s}:
                     if t in tmp[s]:
-                        new_tmp[n] -= { t }
+                        new_tmp[n] -= {t}
 
         for n in self.block_id_set - {root_id}:
             self.idom[n] = random.choice(list(new_tmp[n]))
+
     def construct_dominator_tree(self):
         for child, parent in self.idom.items():
             child_bb: BasicBlock = self.blocks[child]
@@ -304,6 +300,7 @@ class ControlFlowGraph:
 
             parent_bb: BasicBlock = self.blocks[parent]
             parent_bb.dominator_tree_children_id.append(child_bb.id)
+
     def post_order_comp(self):
         """
         Post-Order
@@ -336,14 +333,13 @@ class ControlFlowGraph:
             for child in reversed(children[node]):
                 stack.append((child, False))
 
-
     # ++++++++ SSA ++++++++
     def dom_front(self):
         """
         Dominance Frontier
         :return:
         """
-        df: Dict[int, set] = { i: set() for i in range(self.n_bbs)}
+        df: Dict[int, set] = {i: set() for i in range(self.n_bbs)}
 
         for i in self.post_order:
             # Compute local component
@@ -357,6 +353,7 @@ class ControlFlowGraph:
                     if y != self.idom[i]:
                         df[i] |= {y}
         self.df = df
+
     def df_plus(self, sn):
         """
         iterated dominance frontier DF+()
@@ -379,6 +376,7 @@ class ControlFlowGraph:
             if d != self.dfp:
                 self.dfp = d
                 change = True
+
     def minimal_ssa(self):
         variables: set[str] = set()
 
@@ -423,6 +421,7 @@ class ControlFlowGraph:
                             worklist.append(y)
 
         self.rename_variables(def_sites, variables)
+
     def rename_variables(self, def_sites: Dict[str, List], variables: set[str]) -> None:
 
         # initialize version counters
@@ -447,7 +446,6 @@ class ControlFlowGraph:
             if operand:
                 if operand.type == OperandType.VAR:
                     if operand.value.varname in stacks:
-
                         operand.type = OperandType.SSA_VAR
                         operand.value = SSAVariable(operand.value, stacks[operand.value.varname][-1])
 
@@ -456,15 +454,12 @@ class ControlFlowGraph:
                         # if arg.type == OperandType.VAR:
                         if isinstance(arg.value, Variable):
                             if arg.value.varname in stacks:
-
                                 arg.type = OperandType.SSA_VAR
                                 arg.value = SSAVariable(arg.value, stacks[arg.value.varname][-1])
 
 
             else:
                 pass
-
-
 
         # depth first search
         def dfs(block_para: BasicBlock):
@@ -479,9 +474,8 @@ class ControlFlowGraph:
             # 1
             # handle all phi insts in current block at first
             # allocate new version for phi result.
-            phi_def_list: List[str] = [ ]
+            phi_def_list: List[str] = []
             for phi_inst_in_cbb in block_para.insts.ret_phi_insts():
-
                 assert isinstance(phi_inst_in_cbb.result.value, SSAVariable)
                 v: SSAVariable = phi_inst_in_cbb.result.value
                 # original variable name
@@ -494,7 +488,6 @@ class ControlFlowGraph:
                 # add new version into stack
                 stacks[v_n].append(counters[v_n])
                 phi_def_list.append(v_n)
-
 
             # 2
             # rename ordinary instructions
@@ -517,7 +510,7 @@ class ControlFlowGraph:
 
             # 3
             # record variable version at the exit of the current block
-            exit_versions = { }
+            exit_versions = {}
             for v in variables:
                 exit_versions[v] = stacks[v][-1]
             block_versions[block_para.id] = exit_versions
@@ -529,14 +522,14 @@ class ControlFlowGraph:
                 succ_bb = self.blocks[succ]
 
                 if succ not in phi_operands:
-                    phi_operands[succ] = { }
+                    phi_operands[succ] = {}
 
                 for phi_inst_in_cbb in succ_bb.insts.ret_phi_insts():
                     result: SSAVariable = phi_inst_in_cbb.result.value
                     varname = result.base_name
 
                     if varname not in phi_operands[succ]:
-                        phi_operands[succ][varname] = [-1] * len(self.pred[succ]) # default version
+                        phi_operands[succ][varname] = [-1] * len(self.pred[succ])  # default version
 
                     current_ver = stacks[varname][-1] if varname in stacks and stacks[varname] else 0
                     # save operands
@@ -560,10 +553,8 @@ class ControlFlowGraph:
                     else:
                         assert True
 
-
             for v in reversed(phi_def_list):
                 stacks[v].pop()
-
 
         # enter
         dfs(self.root)
@@ -591,16 +582,17 @@ class ControlFlowGraph:
                     version = phi_data[base_varname][pred_index]
                     phi_arg_var: SSAVariable = phi_args.args[index].value
                     phi_arg_var.version = version
-    def ssa_edges_comp(self, loop_info) -> SSAEdgeBuilder:
+
+    def ssa_edges_comp(self, loop_info) -> 'SSAEdgeBuilder':
         """
         Note:
             Must be guaranteed that all variables have been converted to SSAVariable form before
             calling this routine.
         :return:
         """
-        edges: List[SSAEdge] = [ ]
-        def_sites: Dict[str, int] = { } # var_name -> MIRInst.id
-        phi_sources = defaultdict(list) # phi_inst_id -> original definition list
+        edges: List[SSAEdge] = []
+        def_sites: Dict[str, int] = {}  # var_name -> MIRInst.id
+        phi_sources = defaultdict(list)  # phi_inst_id -> original definition list
 
         def is_loop_carried(phi_block: BasicBlock, def_block: BasicBlock, lo) -> bool:
             """
@@ -643,9 +635,14 @@ class ControlFlowGraph:
             for inst in block.insts.ret_ordinary_insts():
                 operand_list = inst.ret_operand_list()
                 for operand in operand_list:
-                    if isinstance(operand.value, SSAVariable) and operand.value.base_name in def_sites:
+                    if isinstance(operand.value, SSAVariable) and str(operand.value) in def_sites:
                         src_inst_id = def_sites[str(operand.value)]
-                        edges.append(SSAEdge(src_inst_id, inst.id, operand.value.base_name))
+                        edges.append(SSAEdge(
+                            self.insts_dict_by_id[src_inst_id]
+                            , inst
+                            , self.find_defining_block(src_inst_id)
+                            , block
+                            , str(operand.value)))
 
         # stage 3.
         for block in self.blocks.values():
@@ -663,13 +660,19 @@ class ControlFlowGraph:
                         src_block = self.find_defining_block(src_inst_id)
 
                         if src_block and src_block.id in predecessor_id_list:
-                            ssa_edge = SSAEdge(src_inst_id, phi.id, ssa_name)
+
+                            ssa_edge = SSAEdge(
+                                self.insts_dict_by_id[src_inst_id]
+                                , phi
+                                , self.find_defining_block(src_inst_id)
+                                , block
+                                , ssa_name)
+
                             if is_loop_carried(block, src_block, loop_info):
                                 ssa_edge.mark_loop_carried()
                             edges.append(ssa_edge)
 
         return SSAEdgeBuilder(self, edges, def_sites)
-
 
     # ++++++++ Management ++++++++
     def new_a_block(self, bb_id: BasicBlockId, block_insts: List[MIRInst]):
@@ -681,24 +684,25 @@ class ControlFlowGraph:
         self.blocks[bb_id] = src_vertex
         self.block_id_set.add(bb_id)
         self.n_bbs += 1
+
     def find_defining_block(self, inst: Union[MIRInstId, MIRInst]) -> Optional[BasicBlock]:
         if isinstance(inst, int):
             return self.inst_id_to_block[inst]
         elif isinstance(inst, MIRInst):
             return self.inst_id_to_block[inst.id]
         return None
+
     def add_new_inst(self, inst: MIRInst, block: BasicBlock):
         self.insts.insert_insts(-1, inst)
         self.insts_dict_by_id[inst.id] = inst
         self.inst_id_to_block[inst.id] = block
+
     def print_dom_tree(self, block: BasicBlock):
         print(", ".join(map(str, block.dominator_tree_children_id)) + '\t\t\t')
         for child_id in block.dominator_tree_children_id:
             self.print_dom_tree(self.blocks[child_id])
 
-
-
-    def __built__(self):
+    def build(self):
 
         self.construct_cfg()
         self.assign_ranks()

@@ -1,8 +1,11 @@
 from enum import Enum
 
 class LatticeState(Enum):
+    # NAC, Not a Constant
     BOTTOM = 0,
+    # Undecidable
     TOP = 1,
+    # Constant
     CONSTANT = 2,
 
 class ConstLattice:
@@ -39,37 +42,28 @@ class ConstLattice:
     def is_top(self):
         return self.state == LatticeState.TOP
 
-    def meet(self, other):
-        """
-        格上的meet操作（下确界）
-        合并两个格值，返回新格值
-        """
-        # 如果任一为BOTTOM，结果为BOTTOM
+
+    def __iand__(self, other: 'ConstLattice') -> 'ConstLattice':
+        """overload &= """
         if self.is_bottom() or other.is_bottom():
-            return ConstLattice().set_bottom()
+            self.state = LatticeState.BOTTOM
+            return self
 
-        # 如果自身为TOP，返回other
         if self.is_top():
-            return other.copy()
+            self.state = other.state
+            self.type = other.type
+            self.value = other.value
 
-        # 如果other为TOP，返回自身
         if other.is_top():
-            return self.copy()
+            return self
 
-        # 两者都是常数
-        if self.value == other.value and self.type == other.type:
-            return self.copy()  # 相同值
+        if self.value == other.value and self.type == other.value:
+            return self
+        else:
+            self.state = LatticeState.BOTTOM
 
-        # 值不同，冲突
-        return ConstLattice().set_bottom()
+        return self
 
-    def copy(self):
-        """创建副本"""
-        new_lattice = ConstLattice()
-        new_lattice.state = self.state
-        new_lattice.value = self.value
-        new_lattice.type = self.type
-        return new_lattice
 
     def __repr__(self):
         if self.is_constant():

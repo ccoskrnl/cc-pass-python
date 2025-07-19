@@ -214,7 +214,7 @@ class Parser:
             and token_seq[3].is_left_parenthesis()
             and token_seq[-1].is_right_parenthesis()
         ):
-            inst.op = Op.CALL
+            inst.op = Op.CALL_ASSIGN
             inst.result = Operand(
                 token_type_to_operand_type(token_seq[0].token_type)
                 , token_seq[0].value

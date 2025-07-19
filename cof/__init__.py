@@ -2,6 +2,7 @@ import sys
 
 from PyQt6.QtWidgets import QApplication
 
+from cof.early.sccp import SCCPOptimizer, sccp_optimize
 from cof.ir.mir import MIRInsts
 from cof.cfg import ControlFlowGraph
 from cof.cfg.visualizer import CFGVisualizer
@@ -21,11 +22,13 @@ class CodeOptimizer:
         window.show()
         sys.exit(app.exec())
 
-    def initialize_optimizer(self):
-        self.cfg.__built__()
+    def optimize(self):
+        self.cfg.build()
         self.cfg.minimal_ssa()
 
         self.loop_analyzer.analyze_loops()
         ssa_builder: SSAEdgeBuilder = self.cfg.ssa_edges_comp(self.loop_analyzer)
+
+        sccp_optimize(self.cfg, ssa_builder)
 
 
