@@ -1,5 +1,8 @@
 from enum import Enum
 
+from cof.ir.mir import OperandType
+
+
 class LatticeState(Enum):
     # NAC, Not a Constant
     BOTTOM = 0,
@@ -57,13 +60,22 @@ class ConstLattice:
         if other.is_top():
             return self
 
-        if self.value == other.value and self.type == other.value:
+        if self.value == other.value and self.type == other.type:
             return self
         else:
             self.state = LatticeState.BOTTOM
 
         return self
 
+    def is_cond_true(self) -> bool:
+        if self.state == LatticeState.CONSTANT:
+            if self.type == OperandType.BOOL:
+                return self.value
+            elif self.type == OperandType.INT:
+                return False if self.value == 0 else True
+            return True
+        else:
+            return False
 
     def __repr__(self):
         if self.is_constant():

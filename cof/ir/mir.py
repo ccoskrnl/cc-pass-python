@@ -144,6 +144,9 @@ class MIRInst:
         self.operand2: Operand = kwargs['operand2']
         self.result: Operand = kwargs['result']
 
+    def __hash__(self):
+        return hash(self.id)
+
     def __eq__(self, other):
         if not isinstance(other, MIRInst):
             return False
@@ -161,6 +164,7 @@ class MIRInst:
             Op.PHI: self._format_phi
         }.get(self.op, self._format_operator)
 
+        # return f"[ID:{self.id}]    {formatter()}"
         return formatter()
 
     def _format_branch(self):

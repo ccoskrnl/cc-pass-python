@@ -1,9 +1,10 @@
 from typing import Dict, List, Tuple
 
-from cof.analysis.ssa import SSAEdgeBuilder, SSAVariable, SSAEdge
-from cof.cfg import ControlFlowGraph, BasicBlockId
+from cof.analysis.ssa import SSAEdgeBuilder, SSAVariable
+from cof.cfg import ControlFlowGraph, FlattenBasicBlocks
+from cof.cfg.bb import BasicBlockId, BranchType
 from cof.ir.lattice import ConstLattice
-from cof.ir.mir import MIRInst, OperandType
+from cof.ir.mir import MIRInst, OperandType, MIRInstId
 
 
 class SCCPOptimizer:
@@ -17,8 +18,50 @@ class SCCPOptimizer:
         # of the node defined SSAVariable ssa_v
         self.lat_cell: Dict[str, ConstLattice] = { }
 
-        self.flow_wl: set[Tuple[BasicBlockId, BasicBlockId]] = set()
-        self.ssa_wl: set[SSAEdge] = set()
+        self.flow_wl: set[Tuple[MIRInstId, MIRInstId]] = set()
+        self.ssa_wl: set[Tuple[MIRInstId, MIRInstId]] = set()
+
+        self.fatten_blocks: FlattenBasicBlocks = FlattenBasicBlocks(cfg)
+
+    def _build(self):
+        self.fatten_blocks.flatten_blocks()
+
+    def run(self):
+        self.initialize()
+        while self.flow_wl or self.ssa_wl:
+            if self.flow_wl:
+                e = self.flow_wl.pop()
+                # a = e[0]
+                b = e[1]
+
+                # propagate constants along flowgraph edges
+                if not self.exec_flag[e]:
+                    self.exec_flag[e] = True
+                    if self.inst(b).is_phi():
+                        self.visit_phi(self.inst(b))
+
+                    elif self.edge_count(b, self.fatten_blocks.edges) == 1:
+                        self.visit_inst(b, self.inst(b), self.cfg.exec_flow)
+
+            # propagate constants along ssa edges
+            if self.ssa_wl:
+                e = self.ssa_wl.pop()
+                # a = e[0]
+                b = e[1]
+
+                if self.inst(b).is_phi():
+                    self.visit_phi(self.inst(b))
+                elif self.edge_count(b, self.fatten_blocks.edges) >= 1:
+                    self.visit_inst(b, self.inst(b), self.cfg.exec_flow)
+
+    def flow_succ(self, mir_id: MIRInstId) -> List[MIRInstId]:
+        return self.fatten_blocks.succ[mir_id]
+
+    def ssa_succ(self, mir_id: MIRInstId) -> List[MIRInstId]:
+        return self.ssa_builder.succ[mir_id]
+
+    def inst(self, mir_id: MIRInstId) -> MIRInst:
+        return self.cfg.insts_dict_by_id[mir_id]
 
     def initialize(self):
         self.flow_wl = [e for e in self.cfg.edges if e == self.cfg.root.id]
@@ -53,7 +96,7 @@ class SCCPOptimizer:
         for var in inst.ret_operand_list():
             self.lat_cell[str(inst.result.value)] &= (self.lat_cell[str(var.value)])
 
-    def visit_inst(self, k: BasicBlockId, inst: MIRInst):
+    def visit_inst(self, k: MIRInstId, inst: MIRInst, exec_flow: Dict[Tuple[MIRInstId, MIRInstId], BranchType]):
         if inst.is_assignment():
             target: str = str(inst.result.value)
         elif inst.is_if() and inst.operand1 == OperandType.SSA_VAR:
@@ -64,22 +107,29 @@ class SCCPOptimizer:
         val: ConstLattice = self.lat_eval(inst)
         if val != self.lat_cell[target]:
             self.lat_cell[target] &= val
-            self.ssa_wl |= self.ssa_builder.succ[inst]
+            self.ssa_wl |= self.ssa_succ(inst.id)
 
-        succ_k_list = self.cfg.succ[k]
+        succ_k_list = self.flow_succ(k)
 
-        # if val.is_top():
-        #     for i in succ_k_list:
-        #         self.flow_wl |= (k, i)
-        # elif not val.is_bottom():
-        #     if len(succ_k_list) == 2:
-        #         for i in succ_k_list:
-        #             if
+        if val.is_top():
+            for i in succ_k_list:
+                self.flow_wl |= (k, i)
+
+        elif not val.is_bottom():
+            """ constant """
+            if len(succ_k_list) == 2:
+                for i in succ_k_list:
+                    if (val.is_cond_true() and exec_flow[(k, i)] == BranchType.TRUE) \
+                        or (not val.is_cond_true() and exec_flow[(k, i)] == BranchType.FALSE):
+                        self.flow_wl |= (k, i)
+
+            elif len(succ_k_list) == 1:
+                self.flow_wl |= (k, succ_k_list[0])
 
 
 
 
-    def edge_count(self, b: BasicBlockId, edges: List[Tuple[BasicBlockId, BasicBlockId]]) -> int:
+    def edge_count(self, b: MIRInstId, edges: List[Tuple[MIRInstId, MIRInstId]]) -> int:
         """
         return number of executable flowgraph edges leading to b
 

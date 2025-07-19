@@ -26,6 +26,7 @@ class ControlFlowGraph:
 
         # [(src_id, dst_id), (src_Id, dst_id)]
         self.edges: List[Tuple[BasicBlockId, BasicBlockId]] = []
+        self.exec_flow: Dict[Tuple[BasicBlockId, BasicBlockId], BranchType] = { }
 
         # direct predecessor nodes
         self.pred: Dict[BasicBlockId, List[BasicBlockId]] = defaultdict(list)
@@ -47,7 +48,7 @@ class ControlFlowGraph:
         self.max_rank: int = -1
 
     # ++++++++ Initialization ++++++++
-    def construct_cfg(self):
+    def _construct_cfg(self):
 
         # The Set type guarantees that there are no identical elements.
         leaders_set_by_addr = set()
@@ -108,6 +109,7 @@ class ControlFlowGraph:
                 src_vertex.ordered_succ_bbs.append(dst_vertex.id)
 
                 self.edges.append((src_vertex.id, dst_vertex.id))
+                self.exec_flow[(src_vertex.id, dst_vertex.id)] = BranchType.UN_COND
 
             else:
 
@@ -120,6 +122,7 @@ class ControlFlowGraph:
                     src_vertex.branch_type = BasicBlockBranchType.cond
                     src_vertex.ordered_succ_bbs.append(dst_vertex.id)
                     self.edges.append((src_vertex.id, dst_vertex.id))
+                    self.exec_flow[(src_vertex.id, dst_vertex.id)] = BranchType.TRUE
                 else:
                     src_vertex.branch_type = BasicBlockBranchType.jump
 
@@ -130,6 +133,11 @@ class ControlFlowGraph:
                 if dst_vertex != -1:
                     src_vertex.ordered_succ_bbs.append(dst_vertex.id)
                     self.edges.append((src_vertex.id, dst_vertex.id))
+                    if last_inst.op == Op.IF:
+                        self.exec_flow[(src_vertex.id, dst_vertex.id)] = BranchType.FALSE
+                    else:
+                        self.exec_flow[(src_vertex.id, dst_vertex.id)] = BranchType.UN_COND
+
 
         for (src_id, dst_id) in self.edges:
             self.succ[src_id].append(dst_id)
@@ -145,7 +153,7 @@ class ControlFlowGraph:
             for n in self.succ[k]:
                 v.succ_bbs[n] = self.blocks[n]
 
-    def assign_ranks(self):
+    def _assign_ranks(self):
         """
         Depth First Search to assign rank for every block.
         :return:
@@ -227,6 +235,9 @@ class ControlFlowGraph:
 
         # self.handle_loops()
         self.max_rank = max(self.ranks.values())
+
+    # def _construct_exec_flow(self, block: BasicBlock):
+
 
     # ++++++++ Compute ++++++++
     def dom_comp(self):
@@ -332,6 +343,7 @@ class ControlFlowGraph:
 
             for child in reversed(children[node]):
                 stack.append((child, False))
+
 
     # ++++++++ SSA ++++++++
     def dom_front(self):
@@ -674,6 +686,7 @@ class ControlFlowGraph:
 
         return SSAEdgeBuilder(self, edges, def_sites)
 
+
     # ++++++++ Management ++++++++
     def new_a_block(self, bb_id: BasicBlockId, block_insts: List[MIRInst]):
         src_vertex = BasicBlock(bb_id, block_insts)
@@ -704,8 +717,8 @@ class ControlFlowGraph:
 
     def build(self):
 
-        self.construct_cfg()
-        self.assign_ranks()
+        self._construct_cfg()
+        self._assign_ranks()
 
         self.dom_comp()
         self.idom_comp()
@@ -714,3 +727,28 @@ class ControlFlowGraph:
 
         self.dom_front()
         self.df_plus(self.block_id_set)
+
+class FlattenBasicBlocks:
+    def __init__(self, cfg: ControlFlowGraph):
+        self.cfg: ControlFlowGraph = cfg
+        self.succ: Dict[MIRInstId, List[MIRInstId]] = defaultdict(list)
+        self.edges: List[Tuple[MIRInstId, MIRInstId]] = [ ]
+
+    def _handle_block(self, block: BasicBlock):
+        insts = block.insts.ret_insts()
+        for idx, inst in enumerate(insts[:-1]):
+            idx += 1
+            self.succ[inst.id].append(insts[idx].id)
+            self.edges.append((inst.id, insts[idx].id))
+
+        last_inst = insts[-1]
+        for b_id in self.cfg.succ[block.id]:
+            block = self.cfg.blocks[b_id]
+            first_inst = block.insts.ret_inst_by_idx(0)
+            self.succ[last_inst.id].append(first_inst.id)
+            self.edges.append((last_inst.id, first_inst.id))
+            self._handle_block(block)
+
+    def flatten_blocks(self):
+        self._handle_block(self.cfg.root)
+

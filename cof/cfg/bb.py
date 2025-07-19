@@ -15,6 +15,11 @@ class BasicBlockBranchType(Enum):
     cond = 1
     switch = 2
 
+class BranchType(Enum):
+    FALSE = 0,
+    TRUE = 1
+    UN_COND = 2,
+
 
 class BasicBlock:
     def __init__(self, bb_id: Optional[BasicBlockId], insts: Optional[List[MIRInst]]):
@@ -56,6 +61,13 @@ class BasicBlock:
         self.dominator_tree_parent: Optional['BasicBlock'] = None
         self.dominator_tree_children_id: List[int] = [ ]
 
+    def __hash__(self):
+        return hash(self.id)
+
+    def __eq__(self, other):
+        if not isinstance(other, BasicBlock):
+            return False
+        return self.id == other.id
 
     def add_comment(self, comment: str) -> None:
         self.comment = comment

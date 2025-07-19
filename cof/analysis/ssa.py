@@ -1,5 +1,5 @@
 from collections import defaultdict
-from typing import Dict
+from typing import Dict, Tuple
 
 from cof.ir.mir import *
 
@@ -40,6 +40,10 @@ class SSAEdge:
         self.type = "REGULAR"
         self.loop_carried = False
 
+    @property
+    def id(self) -> Tuple[MIRInstId, MIRInstId]:
+        return self.source_inst.id, self.target_inst.id
+
     def mark_loop_carried(self):
         self.type = "LOOP_CARRIED"
         self.loop_carried = True
@@ -52,18 +56,24 @@ class SSAEdge:
 class SSAEdgeBuilder:
     def __init__(self, cfg, edges: List[SSAEdge], def_map):
         self.cfg = cfg
-        self.edges: List[SSAEdge] = edges
-        self.succ: Dict[MIRInst, List[SSAEdge]] = self._construct_ssa_succ()
+        self.ssa_edge_list: List[SSAEdge] = edges
+        self.edges: List[Tuple[MIRInstId, MIRInstId]] = self._collect_ssa_edge()
+        self.succ: Dict[MIRInstId, List[MIRInstId]] = self._construct_ssa_succ()
         self.def_map = def_map
 
-    def _construct_ssa_succ(self) -> Dict[MIRInst, List[SSAEdge]]:
-        succ: Dict[MIRInst, List[SSAEdge]] = defaultdict(list)
-        for edge in self.edges:
-            succ[edge.source_inst].append(edge)
-
+    def _construct_ssa_succ(self) -> Dict[MIRInstId, List[MIRInstId]]:
+        succ: Dict[MIRInstId, List[MIRInstId]] = defaultdict(list)
+        for s,d in self.edges:
+            succ[s].append(d)
         return succ
 
+    def _collect_ssa_edge(self) -> List[Tuple[MIRInstId, MIRInstId]]:
+        edges: List[Tuple[MIRInstId, MIRInstId]] = []
 
+        for e in self.ssa_edge_list:
+            edges.append(e.id)
+
+        return edges
 
 
 def create_phi_function(varname: str, num_pred_s: int) -> MIRInst:
