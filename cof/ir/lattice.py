@@ -6,7 +6,7 @@ from cof.ir.mir import OperandType
 class LatticeState(Enum):
     # NAC, Not a Constant
     BOTTOM = 0,
-    # Undecidable
+    # Undecidable, but maybe a constant.
     TOP = 1,
     # Constant
     CONSTANT = 2,
@@ -17,10 +17,10 @@ class ConstLattice:
         self.value = None
         self.type = None
 
-    def set_constant(self, value) -> 'ConstLattice':
+    def set_constant(self, value, t) -> 'ConstLattice':
         self.state = LatticeState.CONSTANT
         self.value = value
-        self.type = type(value)
+        self.type = t
         return self
 
     def set_bottom(self) -> 'ConstLattice':

@@ -67,13 +67,13 @@ class ControlFlowGraph:
 
                 case Op.IF:
                     leaders_set_by_addr.add(inst_idx + 1)
-                    assert inst.result.type == OperandType.ADDR
+                    assert inst.result.type == OperandType.PTR
                     target = int(inst.result.value)
                     leaders_set_by_addr.add(target)
 
                 case Op.GOTO:
                     leaders_set_by_addr.add(inst_idx + 1)
-                    assert inst.result.type == OperandType.ADDR
+                    assert inst.result.type == OperandType.PTR
                     target = int(inst.result.value)
                     leaders_set_by_addr.add(target)
 

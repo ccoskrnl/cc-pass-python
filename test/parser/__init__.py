@@ -6,7 +6,7 @@ import sys
 
 token_type_2_operand_type: Dict[TokenType, OperandType] = {
 
-    TokenType.ADDR: OperandType.ADDR,
+    TokenType.ADDR: OperandType.PTR,
     TokenType.VAR: OperandType.VAR,
 
     TokenType.INT: OperandType.INT,

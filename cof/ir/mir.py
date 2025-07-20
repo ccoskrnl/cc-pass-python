@@ -1,15 +1,9 @@
 from enum import Enum
 from typing import List, Optional, Union
 
-type MIRInstId = int
-
-mir_inst_id = 0
-def new_id() -> MIRInstId:
-    global mir_inst_id
-    mir_inst_id += 1
-    return mir_inst_id
 
 class OperandType(Enum):
+    VOID = 0
 
     VAR = 1
     SSA_VAR = 2
@@ -19,11 +13,64 @@ class OperandType(Enum):
     INT = 12
     STR = 13
 
-    ADDR = 30
+    PTR = 30
 
     ARGS = 40
 
     UNKNOWN = 99
+
+Operand_Type_Str_Map = {
+    OperandType.VOID : "void",
+    OperandType.VAR: "var",
+    OperandType.SSA_VAR: "ssa var",
+    OperandType.INT: "int",
+    OperandType.FLOAT: "float",
+    OperandType.BOOL: "bool",
+    OperandType.STR: "str",
+    OperandType.PTR: "ptr",
+    OperandType.ARGS: "args",
+    OperandType.UNKNOWN: "unknown",
+}
+
+Const_Operand_Type = {
+    OperandType.BOOL,
+    OperandType.FLOAT,
+    OperandType.INT,
+    OperandType.STR
+}
+
+
+class Type:
+    def __init__(self, name: OperandType):
+        self.name = name
+    def __repr__(self):
+        return self.name
+    def __eq__(self, other):
+        self.name = other.name
+
+    def is_void(self):
+        return True if self.name == OperandType.VOID else False
+    def is_const(self):
+        return True if self.name in Const_Operand_Type else False
+    def is_ssa_var(self) -> bool:
+        return True if self.name == OperandType.SSA_VAR else False
+    def is_var(self) -> bool:
+        return True if self.name == OperandType.VAR else False
+    def is_ptr(self) -> bool:
+        return True if self.name == OperandType.PTR else False
+
+VOID = Type(OperandType.VOID)
+
+INT = Type(OperandType.INT)
+FLOAT = Type(OperandType.FLOAT)
+BOOL = Type(OperandType.BOOL)
+STR = Type(OperandType.STR)
+
+SSA_VAR = Type(OperandType.SSA_VAR)
+VAR = Type(OperandType.VAR)
+
+PTR = Type(OperandType.PTR)
+
 
 class Op(Enum):
     ADD = 1
@@ -53,7 +100,10 @@ class Op(Enum):
     EXIT = 98
 
     UNKNOWN = 99
-
+# bool op
+Bool_Op = {
+    Op.LEQ, Op.GEQ, Op.LE, Op.GE, Op.EQ, Op.NEQ
+}
 # All evaluatable expressions.
 Exp_Op = {
     Op.ADD, Op.SUB, Op.MUL, Op.DIV,
@@ -61,7 +111,6 @@ Exp_Op = {
     Op.LEQ, Op.GEQ, Op.LE, Op.GE, Op.EQ, Op.NEQ,
     Op.IF
 }
-
 # All operators with assignment operation
 Assignment_Op = {
     Op.ADD, Op.SUB, Op.MUL, Op.DIV,
@@ -69,7 +118,6 @@ Assignment_Op = {
     Op.LEQ, Op.GEQ, Op.LE, Op.GE, Op.EQ, Op.NEQ,
     Op.PHI, Op.CALL_ASSIGN
 }
-
 OP_STR_MAP = {
     Op.ADD: "+",
     Op.SUB: "-",
@@ -89,7 +137,6 @@ OP_STR_MAP = {
     Op.EXIT: "exit",
     Op.PRINT: "print"
 }
-
 def op_str(op: Op) -> str:
     """Return string representation of operator"""
     return OP_STR_MAP.get(op, "UNKNOWN")
@@ -113,26 +160,95 @@ class Args:
 
 
 class Operand:
+
+    # ++++++++ init ++++++++
     def __init__(self, op_type: OperandType, value):
         self.type = op_type
         self.value = value
 
+    # ++++++++ repr ++++++++
     def __repr__(self):
         formatter = {
-            OperandType.ADDR: self._format_addr,
+            OperandType.PTR: self._format_addr,
         }.get(self.type, self._format_const)
         return formatter()
-
     def _format_addr(self):
         return f"addr_{self.value}"
-
     def _format_const(self):
         return str(self.value)
+    def _val(self, operand: 'Operand'):
+        assert isinstance(self.type, OperandType)
+        return "" if operand is None else str(operand)
+
+    # ++++++++ type ++++++++
+    def is_const(self) -> bool:
+        return True if self.type else False
+    def is_ssa_var(self) -> bool:
+        return True if self.type == OperandType.SSA_VAR else False
+    def is_var(self) -> bool:
+        return True if self.type == OperandType.VAR else False
+    def is_ptr(self) -> bool:
+        return True if self.type == OperandType.PTR else False
+    def is_void(self) -> bool:
+        return True if self.type == OperandType.VOID else False
 
 
-def _val(operand: Operand):
-    return "" if operand is None else str(operand)
+    # ++++++++ comp ++++++++
+    def comp(self, op: Op, other: 'Operand') -> 'Operand':
+        operand1, operand2, result_type = self._normalize_operands(other)
 
+        op_handlers = {
+            Op.ADD: lambda a, b: a + b,
+            Op.SUB: lambda a, b: a - b,
+            Op.MUL: lambda a, b: a * b,
+            Op.DIV: self._safe_divide,
+            Op.LE: lambda a, b: a < b,
+            Op.GE: lambda a, b: a > b,
+            Op.LEQ: lambda a, b: a <= b,
+            Op.GEQ: lambda a, b: a >= b,
+            Op.EQ: lambda a, b: a == b,
+            Op.NEQ: lambda a, b: a != b,
+        }
+
+        # 执行操作
+        if op not in op_handlers:
+            return Operand(OperandType.UNKNOWN, None)
+
+        handler = op_handlers[op]
+        result_value = handler(operand1, operand2)
+
+        final_type = OperandType.BOOL if op in Bool_Op else result_type
+
+        return Operand(final_type, result_value)
+    def _normalize_operands(self, other: 'Operand') -> tuple:
+        if self.type == other.type:
+            return self.value, other.value, self.type
+
+        numeric_types = { OperandType.INT, OperandType.FLOAT }
+        if self.type in numeric_types and other.type in numeric_types:
+            # widening to float
+            return float(self.value), float(other.value), OperandType.FLOAT
+
+        raise TypeError("Incompatible operand types: "
+                        f"{Operand_Type_Str_Map[self.type]} and {Operand_Type_Str_Map[other.type]}")
+    def _safe_divide(self, a: float, b: float) -> float:
+        """安全的除法处理"""
+        if b == 0:
+            raise ZeroDivisionError("Division by zero")
+        return a / b
+
+# ++++++++++++++++++++++++ MIR ++++++++++++++++++++
+
+type MIRInstId = int
+
+mir_inst_id = 0
+def new_id() -> MIRInstId:
+    global mir_inst_id
+    mir_inst_id += 1
+    return mir_inst_id
+
+def _val(value) -> str:
+    return str(value) if value else ""
 
 class MIRInst:
     def __init__(self, **kwargs):
@@ -143,15 +259,12 @@ class MIRInst:
         self.operand1: Operand = kwargs['operand1']
         self.operand2: Operand = kwargs['operand2']
         self.result: Operand = kwargs['result']
-
     def __hash__(self):
         return hash(self.id)
-
     def __eq__(self, other):
         if not isinstance(other, MIRInst):
             return False
         return self.id == other.id
-
     def __repr__(self):
         formatter = {
             Op.IF: self._format_branch,
@@ -213,15 +326,14 @@ class MIRInst:
         return True if self.op == Op.CALL or self.op == Op.CALL_ASSIGN else False
     def is_phi(self) -> bool:
         return True if self.op == Op.PHI else False
+
     def get_assigned_var(self) -> Optional[Variable]:
         # assert self.result.type == OperandType.VAR
         return self.result.value if self.result else None
-
     def get_call_arg_list(self) -> List[Operand]:
         assert self.op == Op.CALL or self.op == Op.PHI
         assert self.operand2.type == OperandType.ARGS
         return self.operand2.value.args
-
     def ret_operand_list_of_exp(self) -> List[Operand]:
         l: List[Operand] = []
         if self.is_assignment():
@@ -233,7 +345,6 @@ class MIRInst:
             l.append(self.operand1)
 
         return l
-
     def ret_operand_list(self) -> List[Operand]:
         l: List[Operand] = []
 
@@ -271,13 +382,11 @@ class MIRInsts:
             if i == inst:
                 return True
         return False
-
     def inst_exist_by_id(self, inst_id: int) -> bool:
         for i in self.ret_insts():
             if i.id == inst_id:
                 return True
         return False
-
     def inst_exist_by_addr(self, addr: int) -> bool:
         for inst in self.ret_insts():
             if inst.addr == addr:
@@ -287,7 +396,6 @@ class MIRInsts:
     def add_phi_inst(self, phi_inst: MIRInst) -> None:
         self.ir_insts.insert(0, phi_inst)
         self.phi_insts_idx_end += 1
-
     def insert_insts(self, index: Optional[int], insts: Union[MIRInst, List[MIRInst]]) -> None:
 
         if not index or index >= self.num:
@@ -302,15 +410,11 @@ class MIRInsts:
 
     def ret_inst_by_idx(self, index: int) -> MIRInst:
         return self.ir_insts[index]
-
     def ret_insts_by_pos(self, start_pos: int, end_pos: int) -> List[MIRInst]:
         return self.ir_insts[start_pos:end_pos]
-
     def ret_insts(self) -> List[MIRInst]:
         return self.ir_insts
-
     def ret_phi_insts(self) -> List[MIRInst]:
         return self.ir_insts[: self.phi_insts_idx_end]
-
     def ret_ordinary_insts(self) -> List[MIRInst]:
         return self.ir_insts[self.phi_insts_idx_end:]

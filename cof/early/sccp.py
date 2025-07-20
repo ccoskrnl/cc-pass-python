@@ -88,6 +88,9 @@ class SCCPOptimizer:
         for operand in inst.ret_operand_list_of_exp():
             if isinstance(operand.value, SSAVariable):
                 c &= self.lat_cell[str(operand.value)]
+            elif operand.is_const():
+                para: ConstLattice = ConstLattice()
+                para.set_constant(operand.value, operand.type)
 
         return c
 
