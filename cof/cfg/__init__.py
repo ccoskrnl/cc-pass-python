@@ -736,20 +736,32 @@ class FlattenBasicBlocks:
         self.cfg: ControlFlowGraph = cfg
         self.succ: Dict[MIRInstId, List[MIRInstId]] = defaultdict(list)
         self.edges: List[Tuple[MIRInstId, MIRInstId]] = [ ]
+        self.exec_flow: Dict[Tuple[BasicBlockId, BasicBlockId], BranchType] = { }
 
     def _handle_block(self, block: BasicBlock):
         insts = block.insts.ret_insts()
         for idx, inst in enumerate(insts[:-1]):
             idx += 1
             self.succ[inst.id].append(insts[idx].id)
-            self.edges.append((inst.id, insts[idx].id))
+            edge = (inst.id, insts[idx].id)
+            self.edges.append(edge)
+            self.exec_flow[edge] = BranchType.UN_COND
+
 
         last_inst = insts[-1]
         for b_id in self.cfg.succ[block.id]:
+            find_false_branch = False
             block = self.cfg.blocks[b_id]
+
+            next_inst = block.insts.find_inst_by_key(key="addr", value=last_inst.addr + 1)
+            if next_inst:
+                find_false_branch = True
+
             first_inst = block.insts.ret_inst_by_idx(0)
             self.succ[last_inst.id].append(first_inst.id)
-            self.edges.append((last_inst.id, first_inst.id))
+            edge = (last_inst.id, first_inst.id)
+            self.edges.append(edge)
+            self.exec_flow[edge] = BranchType.FALSE if find_false_branch else BranchType.TRUE
             self._handle_block(block)
 
     def flatten_blocks(self):

@@ -41,7 +41,7 @@ class SCCPOptimizer:
                         self.visit_phi(self.inst(b))
 
                     elif self.edge_count(b, self.fatten_blocks.edges) == 1:
-                        self.visit_inst(b, self.inst(b), self.cfg.exec_flow)
+                        self.visit_inst(b, self.inst(b), self.fatten_blocks.exec_flow)
 
             # propagate constants along ssa edges
             if self.ssa_wl:
@@ -52,7 +52,7 @@ class SCCPOptimizer:
                 if self.inst(b).is_phi():
                     self.visit_phi(self.inst(b))
                 elif self.edge_count(b, self.fatten_blocks.edges) >= 1:
-                    self.visit_inst(b, self.inst(b), self.cfg.exec_flow)
+                    self.visit_inst(b, self.inst(b), self.fatten_blocks.exec_flow)
 
     def flow_succ_edge(self, mir_id: MIRInstId) -> set[Tuple[MIRInstId, MIRInstId]]:
         s = set()
@@ -139,7 +139,7 @@ class SCCPOptimizer:
     def visit_inst(self, k: MIRInstId, inst: MIRInst, exec_flow: Dict[Tuple[MIRInstId, MIRInstId], BranchType]):
         if inst.is_assignment():
             target: str = str(inst.result.value)
-        elif inst.is_if() and inst.operand1 == OperandType.SSA_VAR:
+        elif inst.is_if() and inst.operand1.is_ssa_var():
             target: str = str(inst.operand1.value)
         else:
             return
@@ -188,3 +188,4 @@ def sccp_optimize(cfg: ControlFlowGraph, ssa_builder: SSAEdgeBuilder):
     optimizer = SCCPOptimizer(cfg, ssa_builder)
     optimizer.initialize()
     optimizer.run()
+    pass

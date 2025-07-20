@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import List, Optional, Union
+from typing import List, Optional, Union, Any, Callable
 
 
 class OperandType(Enum):
@@ -288,8 +288,8 @@ class MIRInst:
             Op.PHI: self._format_phi
         }.get(self.op, self._format_operator)
 
-        # return f"[ID:{self.id}]    {formatter()}"
-        return formatter()
+        return f"[ID:{self.id}]    {formatter()}"
+        # return formatter()
 
     def _format_branch(self):
         return f"if {_val(self.operand1)} goto addr_{_val(self.result)}"
@@ -418,6 +418,18 @@ class MIRInsts:
         elif isinstance(insts, List) and all(isinstance(item, MIRInst) for item in insts):
             self.ir_insts[index:index] = insts
             self.num += len(insts)
+
+    def find_inst_by_key(self, *, key: str, value: Any) -> Optional[MIRInst]:
+        for inst in self.ir_insts:
+            if getattr(inst, key) == value:
+                return inst
+        return None
+    # find_inst(lambda i: i.addr == 0x1000)
+    def find_inst(self, predicate: Callable[[MIRInst], bool]) -> Optional[MIRInst]:
+        for inst in self.ir_insts:
+            if predicate(inst):
+                return inst
+        return None
 
     def ret_inst_by_idx(self, index: int) -> MIRInst:
         return self.ir_insts[index]
