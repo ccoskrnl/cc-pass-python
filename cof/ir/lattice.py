@@ -15,25 +15,24 @@ class ConstLattice:
     def __init__(self):
         self.state: LatticeState = LatticeState.TOP
         self.value = None
-        self.type = None
+        # self.type = None
 
-    def set_constant(self, value, t) -> 'ConstLattice':
+    def set_constant(self, value) -> 'ConstLattice':
         self.state = LatticeState.CONSTANT
         self.value = value
-        self.type = t
+        # self.type = t
         return self
 
     def set_bottom(self) -> 'ConstLattice':
         self.state = LatticeState.BOTTOM
         self.value = None
-        self.type = None
+        # self.type = None
         return self
 
     def set_top(self):
-        """设置为TOP (未知状态)"""
         self.state = LatticeState.TOP
         self.value = None
-        self.type = None
+        # self.type = None
         return self
 
     def is_constant(self):
@@ -54,13 +53,14 @@ class ConstLattice:
 
         if self.is_top():
             self.state = other.state
-            self.type = other.type
+            # self.type = other.type
             self.value = other.value
+            return self
 
         if other.is_top():
             return self
 
-        if self.value == other.value and self.type == other.type:
+        if self.value == other.value:
             return self
         else:
             self.state = LatticeState.BOTTOM
@@ -69,11 +69,7 @@ class ConstLattice:
 
     def is_cond_true(self) -> bool:
         if self.state == LatticeState.CONSTANT:
-            if self.type == OperandType.BOOL:
-                return self.value
-            elif self.type == OperandType.INT:
-                return False if self.value == 0 else True
-            return True
+            return self.value.is_true()
         else:
             return False
 
@@ -88,5 +84,5 @@ class ConstLattice:
         if not isinstance(other, ConstLattice):
             return False
         return (self.state == other.state and
-                self.value == other.value and
-                self.type == other.type)
+                self.value == other.value)
+                # self.type == other.type)

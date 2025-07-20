@@ -4,7 +4,7 @@ from cof.analysis.ssa import SSAEdgeBuilder, SSAVariable
 from cof.cfg import ControlFlowGraph, FlattenBasicBlocks
 from cof.cfg.bb import BasicBlockId, BranchType
 from cof.ir.lattice import ConstLattice
-from cof.ir.mir import MIRInst, OperandType, MIRInstId
+from cof.ir.mir import MIRInst, OperandType, MIRInstId, Operand, mir_eval
 
 
 class SCCPOptimizer:
@@ -22,12 +22,12 @@ class SCCPOptimizer:
         self.ssa_wl: set[Tuple[MIRInstId, MIRInstId]] = set()
 
         self.fatten_blocks: FlattenBasicBlocks = FlattenBasicBlocks(cfg)
+        self._build()
 
     def _build(self):
         self.fatten_blocks.flatten_blocks()
 
     def run(self):
-        self.initialize()
         while self.flow_wl or self.ssa_wl:
             if self.flow_wl:
                 e = self.flow_wl.pop()
@@ -54,8 +54,23 @@ class SCCPOptimizer:
                 elif self.edge_count(b, self.fatten_blocks.edges) >= 1:
                     self.visit_inst(b, self.inst(b), self.cfg.exec_flow)
 
+    def flow_succ_edge(self, mir_id: MIRInstId) -> set[Tuple[MIRInstId, MIRInstId]]:
+        s = set()
+        succ_inst_id_list = self.fatten_blocks.succ[mir_id]
+        for succ in succ_inst_id_list:
+            s.add((mir_id, succ))
+        return s
+
     def flow_succ(self, mir_id: MIRInstId) -> List[MIRInstId]:
         return self.fatten_blocks.succ[mir_id]
+
+
+    def ssa_succ_edge(self, mir_id: MIRInstId) -> set[Tuple[MIRInstId, MIRInstId]]:
+        s = set()
+        succ_inst_id_list = self.ssa_builder.succ[mir_id]
+        for succ in succ_inst_id_list:
+            s.add((mir_id, succ))
+        return s
 
     def ssa_succ(self, mir_id: MIRInstId) -> List[MIRInstId]:
         return self.ssa_builder.succ[mir_id]
@@ -64,10 +79,12 @@ class SCCPOptimizer:
         return self.cfg.insts_dict_by_id[mir_id]
 
     def initialize(self):
-        self.flow_wl = [e for e in self.cfg.edges if e == self.cfg.root.id]
-        self.ssa_wl = [ ]
+        first_inst_id = self.cfg.insts.ret_inst_by_idx(0).id
+        self.flow_wl = set()
+        self.flow_wl.add((first_inst_id, self.flow_succ(first_inst_id).pop()))
+        self.ssa_wl = set ()
 
-        for p in self.cfg.edges:
+        for p in self.fatten_blocks.edges:
             self.exec_flag[p[0], p[1]] = False
 
         for i in self.cfg.insts.ret_insts():
@@ -84,14 +101,34 @@ class SCCPOptimizer:
         :param inst: any mir insts
         :return: a constant lattice
         """
-        c: ConstLattice = ConstLattice()
-        for operand in inst.ret_operand_list_of_exp():
-            if isinstance(operand.value, SSAVariable):
-                c &= self.lat_cell[str(operand.value)]
-            elif operand.is_const():
-                para: ConstLattice = ConstLattice()
-                para.set_constant(operand.value, operand.type)
 
+
+
+        c: ConstLattice = ConstLattice()
+
+        if not inst.is_evaluatable():
+            return c
+
+        operand_list: List[Operand] = inst.ret_operand_list_of_exp()
+        op_cl_list: List[ConstLattice] = [ ]
+        for o in operand_list:
+            if isinstance(o.value, SSAVariable):
+                op_cl = self.lat_cell[str(o.value)]
+                op_cl_list.append(op_cl)
+            else:
+                op_cl: ConstLattice = ConstLattice()
+                op_cl.set_constant(o)
+                op_cl_list.append(op_cl)
+
+        # two operands are constant.
+        if len(operand_list) == 2 and (op_cl_list[0].value and op_cl_list[1].value):
+            result = mir_eval(inst.op, op_cl_list[0].value, op_cl_list[1].value)
+            c.set_constant(result)
+        elif len(op_cl_list) == 1 and op_cl_list[0].value:
+            return op_cl_list[0]
+        else:
+            for cl in op_cl_list:
+                c &= cl
         return c
 
     def visit_phi(self, inst: MIRInst):
@@ -110,24 +147,23 @@ class SCCPOptimizer:
         val: ConstLattice = self.lat_eval(inst)
         if val != self.lat_cell[target]:
             self.lat_cell[target] &= val
-            self.ssa_wl |= self.ssa_succ(inst.id)
+            self.ssa_wl |= self.ssa_succ_edge(inst.id)
 
-        succ_k_list = self.flow_succ(k)
+        k_succ_edges_set = self.flow_succ_edge(k)
 
         if val.is_top():
-            for i in succ_k_list:
-                self.flow_wl |= (k, i)
+            self.flow_wl |= k_succ_edges_set
 
         elif not val.is_bottom():
             """ constant """
-            if len(succ_k_list) == 2:
-                for i in succ_k_list:
-                    if (val.is_cond_true() and exec_flow[(k, i)] == BranchType.TRUE) \
-                        or (not val.is_cond_true() and exec_flow[(k, i)] == BranchType.FALSE):
-                        self.flow_wl |= (k, i)
+            if len(k_succ_edges_set) == 2:
+                for succ_edge in k_succ_edges_set:
+                    if (val.is_cond_true() and exec_flow[succ_edge] == BranchType.TRUE) \
+                        or (not val.is_cond_true() and exec_flow[succ_edge] == BranchType.FALSE):
+                        self.flow_wl.add(succ_edge)
 
-            elif len(succ_k_list) == 1:
-                self.flow_wl |= (k, succ_k_list[0])
+            elif len(k_succ_edges_set) == 1:
+                self.flow_wl |= k_succ_edges_set
 
 
 
@@ -151,3 +187,4 @@ class SCCPOptimizer:
 def sccp_optimize(cfg: ControlFlowGraph, ssa_builder: SSAEdgeBuilder):
     optimizer = SCCPOptimizer(cfg, ssa_builder)
     optimizer.initialize()
+    optimizer.run()

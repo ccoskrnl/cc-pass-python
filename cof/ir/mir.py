@@ -166,6 +166,10 @@ class Operand:
         self.type = op_type
         self.value = value
 
+    def __eq__(self, other):
+        return True if self.type == other.type \
+                       and self.value == other.value else False
+
     # ++++++++ repr ++++++++
     def __repr__(self):
         formatter = {
@@ -192,50 +196,57 @@ class Operand:
     def is_void(self) -> bool:
         return True if self.type == OperandType.VOID else False
 
+    # ++++++++ value ++++++++
+    def is_true(self) -> bool:
+        return True if self.type == OperandType.BOOL and self.value == True else False
 
-    # ++++++++ comp ++++++++
-    def comp(self, op: Op, other: 'Operand') -> 'Operand':
-        operand1, operand2, result_type = self._normalize_operands(other)
 
-        op_handlers = {
-            Op.ADD: lambda a, b: a + b,
-            Op.SUB: lambda a, b: a - b,
-            Op.MUL: lambda a, b: a * b,
-            Op.DIV: self._safe_divide,
-            Op.LE: lambda a, b: a < b,
-            Op.GE: lambda a, b: a > b,
-            Op.LEQ: lambda a, b: a <= b,
-            Op.GEQ: lambda a, b: a >= b,
-            Op.EQ: lambda a, b: a == b,
-            Op.NEQ: lambda a, b: a != b,
-        }
 
-        # 执行操作
-        if op not in op_handlers:
-            return Operand(OperandType.UNKNOWN, None)
+def mir_eval(op: Op, operand1: Operand, operand2: Operand) -> Operand:
 
-        handler = op_handlers[op]
-        result_value = handler(operand1, operand2)
-
-        final_type = OperandType.BOOL if op in Bool_Op else result_type
-
-        return Operand(final_type, result_value)
-    def _normalize_operands(self, other: 'Operand') -> tuple:
-        if self.type == other.type:
-            return self.value, other.value, self.type
-
+    def normalize_operands(op1: Operand, op2: Operand) -> tuple:
+        if op1.type == op2.type:
+            return op1.value, op2.value, op1.type
         numeric_types = { OperandType.INT, OperandType.FLOAT }
-        if self.type in numeric_types and other.type in numeric_types:
+        if op1.type in numeric_types and op2.type in numeric_types:
             # widening to float
-            return float(self.value), float(other.value), OperandType.FLOAT
+            return float(op1.value), float(op2.value), OperandType.FLOAT
 
         raise TypeError("Incompatible operand types: "
-                        f"{Operand_Type_Str_Map[self.type]} and {Operand_Type_Str_Map[other.type]}")
-    def _safe_divide(self, a: float, b: float) -> float:
-        """安全的除法处理"""
+                        f"{Operand_Type_Str_Map[op1.type]} and {Operand_Type_Str_Map[op2.type]}")
+
+    def safe_divide(a: float, b: float) -> float:
         if b == 0:
             raise ZeroDivisionError("Division by zero")
         return a / b
+
+    op1, op2, result_type = normalize_operands(operand1, operand2)
+
+    op_handlers = {
+        Op.ADD: lambda a, b: a + b,
+        Op.SUB: lambda a, b: a - b,
+        Op.MUL: lambda a, b: a * b,
+        Op.DIV: safe_divide,
+        Op.LE: lambda a, b: a < b,
+        Op.GE: lambda a, b: a > b,
+        Op.LEQ: lambda a, b: a <= b,
+        Op.GEQ: lambda a, b: a >= b,
+        Op.EQ: lambda a, b: a == b,
+        Op.NEQ: lambda a, b: a != b,
+    }
+
+    if op not in op_handlers:
+        return Operand(OperandType.UNKNOWN, None)
+
+    handler = op_handlers[op]
+    result_value = handler(op1, op2)
+
+    final_type = OperandType.BOOL if op in Bool_Op else result_type
+
+    return Operand(final_type, result_value)
+
+
+
 
 # ++++++++++++++++++++++++ MIR ++++++++++++++++++++
 

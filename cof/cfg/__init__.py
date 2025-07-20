@@ -422,9 +422,12 @@ class ControlFlowGraph:
                 for y in self.df[def_block_id]:
                     # check if y has phi function of v
                     if not has_phi_for_var(self.blocks[y], varname):
+
                         # insert phi function as the first inst in y
                         new_phi = create_phi_function(varname, num_pred_s=len(self.pred[y]))
+                        # add phi inst into cfg insts
                         self.add_new_inst(new_phi, self.blocks[y])
+                        # add phi inst into block insts
                         self.blocks[y].insts.add_phi_inst(new_phi)
 
                         # check if y is inserted for the first time, join into worklist.
