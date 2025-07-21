@@ -100,6 +100,11 @@ class Op(Enum):
     EXIT = 98
 
     UNKNOWN = 99
+
+Arithmetic_Op = {
+    Op.ADD, Op.SUB, Op.MUL, Op.DIV,
+    Op.LEQ, Op.GEQ, Op.LE, Op.GE, Op.EQ, Op.NEQ,
+}
 # bool op
 Bool_Op = {
     Op.LEQ, Op.GEQ, Op.LE, Op.GE, Op.EQ, Op.NEQ
@@ -198,7 +203,7 @@ class Operand:
 
     # ++++++++ value ++++++++
     def is_true(self) -> bool:
-        return True if self.type == OperandType.BOOL and self.value == True else False
+        return False if self.type == OperandType.BOOL and self.value == False else True
 
 
 
@@ -246,8 +251,6 @@ def mir_eval(op: Op, operand1: Operand, operand2: Operand) -> Operand:
     return Operand(final_type, result_value)
 
 
-
-
 # ++++++++++++++++++++++++ MIR ++++++++++++++++++++
 
 type MIRInstId = int
@@ -262,6 +265,25 @@ def _val(value) -> str:
     return str(value) if value else ""
 
 class MIRInst:
+    """
+
+    if cond goto dest_addr
+        inst.op = Op.IF
+        inst.operand1 = Operand(cond)
+        inst.result = Operand(dest_addr)
+
+    retval := callee( arg1, arg2 )
+        inst.op = Op.CALL_ASSIGN
+        inst.operand1 = Operand(callee)
+        inst.operand2 = Operand(Arg( arg1, arg 2))
+        inst.result = Operand(retval)
+
+    callee( arg1, arg 2)
+        inst.op = Op.CALL
+        inst.operand1 = Operand(callee)
+        inst.operand2 = Operand(Arg( arg1, arg 2))
+
+    """
     def __init__(self, **kwargs):
         self.id: MIRInstId = new_id()
 
@@ -288,11 +310,11 @@ class MIRInst:
             Op.PHI: self._format_phi
         }.get(self.op, self._format_operator)
 
-        return f"[ID:{self.id}]    {formatter()}"
-        # return formatter()
+        # return f"[ID:{self.id}]    {formatter()}"
+        return formatter()
 
     def _format_branch(self):
-        return f"if {_val(self.operand1)} goto addr_{_val(self.result)}"
+        return f"if {_val(self.operand1)} goto {_val(self.result)}"
     def _format_jump(self):
         return f"goto addr_{_val(self.result)}"
     def _format_assign(self):
@@ -338,14 +360,15 @@ class MIRInst:
     def is_phi(self) -> bool:
         return True if self.op == Op.PHI else False
 
-    def get_assigned_var(self) -> Optional[Variable]:
+    def get_dest_var(self):
         # assert self.result.type == OperandType.VAR
-        return self.result.value if self.result else None
-    def get_call_arg_list(self) -> List[Operand]:
-        assert self.op == Op.CALL or self.op == Op.PHI
-        assert self.operand2.type == OperandType.ARGS
-        return self.operand2.value.args
-    def ret_operand_list_of_exp(self) -> List[Operand]:
+        if self.op in Assignment_Op:
+            return self.result.value if self.result else None
+        elif self.is_if():
+            assert self.result
+            return self.operand1.value
+        return None
+    def get_operand_list_of_evaluation(self) -> List[Operand]:
         l: List[Operand] = []
         if self.is_assignment():
             l.append(self.operand1)
@@ -356,7 +379,12 @@ class MIRInst:
             l.append(self.operand1)
 
         return l
-    def ret_operand_list(self) -> List[Operand]:
+
+    def get_call_arg_list(self) -> List[Operand]:
+        assert self.op == Op.CALL or self.op == Op.PHI or self.op == Op.CALL_ASSIGN
+        assert self.operand2.type == OperandType.ARGS
+        return self.operand2.value.args
+    def get_operand_list(self) -> List[Operand]:
         l: List[Operand] = []
 
         if self.is_phi():
@@ -375,6 +403,13 @@ class MIRInst:
 
         return l
 
+    def is_arithmetic(self):
+        return self.op in Arithmetic_Op
+    def all_constant_operands(self):
+        for operand in self.get_operand_list_of_evaluation():
+            if operand.type not in Const_Operand_Type:
+                return False
+        return True
 
 
 class MIRInsts:

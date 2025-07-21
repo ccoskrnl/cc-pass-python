@@ -1,9 +1,10 @@
+import sys
 from typing import Dict
 
 from PyQt6.QtCore import Qt, QPointF
 from PyQt6.QtGui import QPainter, QColor, QFont, QFontMetrics
 from PyQt6.QtWidgets import (QMainWindow, QGraphicsView, QGraphicsScene,
-                             QVBoxLayout, QWidget, QStatusBar, QSplitter)
+                             QVBoxLayout, QWidget, QStatusBar, QSplitter, QApplication)
 
 from .tree_layout import CFGLayout, Tree, TreeLayout
 from .vbb import VisualBasicBlock, BlockItem, EdgeItem
@@ -181,3 +182,10 @@ class CFGVisualizer(QMainWindow):
         # block_item = BlockItem(entry)
         #
         # self.scene.addItem(block_item)
+
+
+def visualize_cfg(cfg: ControlFlowGraph):
+    app = QApplication(sys.argv)
+    window = CFGVisualizer(cfg)
+    window.show()
+    sys.exit(app.exec())

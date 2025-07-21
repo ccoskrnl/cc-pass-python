@@ -1,10 +1,10 @@
 import random
-from collections import deque
-from typing import Tuple
+from collections import deque, defaultdict
+from typing import Tuple, Optional, Dict, List, Union
 
-from .bb import *
-from ..analysis.ssa import *
-from ..ir.mir import *
+from cof.analysis.ssa import SSAEdgeBuilder, SSAEdge, SSAVariable, create_phi_function, has_phi_for_var
+from cof.cfg.bb import BasicBlock, BasicBlockId, BasicBlockBranchType, BranchType
+from cof.ir.mir import MIRInstId, MIRInst, Args, OperandType, Operand, Op, MIRInsts, Variable
 
 
 class ControlFlowGraph:
@@ -46,6 +46,9 @@ class ControlFlowGraph:
 
         self.ranks: Dict[int, int] = {}
         self.max_rank: int = -1
+
+        self._construct_cfg()
+        self._assign_ranks()
 
     # ++++++++ Initialization ++++++++
     def _construct_cfg(self):
@@ -236,8 +239,6 @@ class ControlFlowGraph:
         # self.handle_loops()
         self.max_rank = max(self.ranks.values())
 
-    # def _construct_exec_flow(self, block: BasicBlock):
-
 
     # ++++++++ Compute ++++++++
     def dom_comp(self):
@@ -395,14 +396,14 @@ class ControlFlowGraph:
         # collect all variables.
         for inst in self.insts.ir_insts:
             if inst.is_assignment():
-                variables.add(str(inst.get_assigned_var()))
+                variables.add(str(inst.get_dest_var()))
 
         # record all blocks which defines variable
         def_sites: Dict[str, List] = {v: [] for v in variables}
         for block in self.blocks.values():
             for inst in block.insts.ret_insts():
                 if inst.is_assignment():
-                    variable: Variable = inst.get_assigned_var()
+                    variable: Variable = inst.get_dest_var()
                     def_sites[str(variable)].append(block.id)
 
         # insert phi function for each variable
@@ -513,7 +514,7 @@ class ControlFlowGraph:
 
                 # rename (def)
                 if inst_in_cbb.is_assignment():
-                    v: Variable = inst_in_cbb.get_assigned_var()
+                    v: Variable = inst_in_cbb.get_dest_var()
                     counters[v.varname] += 1
                     new_ver = counters[v.varname]
                     new_var = SSAVariable(v, new_ver)
@@ -648,7 +649,7 @@ class ControlFlowGraph:
         # connect common use.
         for block in self.blocks.values():
             for inst in block.insts.ret_ordinary_insts():
-                operand_list = inst.ret_operand_list()
+                operand_list = inst.get_operand_list()
                 for operand in operand_list:
                     if isinstance(operand.value, SSAVariable) and str(operand.value) in def_sites:
                         src_inst_id = def_sites[str(operand.value)]
@@ -666,7 +667,7 @@ class ControlFlowGraph:
                 # get predecessor id list
                 predecessor_id_list = self.pred[block.id]
 
-                for i, operand in enumerate(phi.ret_operand_list()):
+                for i, operand in enumerate(phi.get_operand_list()):
                     assert isinstance(operand.value, SSAVariable)
                     ssa_name = str(operand.value)
                     if ssa_name in def_sites:
@@ -718,11 +719,7 @@ class ControlFlowGraph:
         for child_id in block.dominator_tree_children_id:
             self.print_dom_tree(self.blocks[child_id])
 
-    def build(self):
-
-        self._construct_cfg()
-        self._assign_ranks()
-
+    def initialize(self):
         self.dom_comp()
         self.idom_comp()
         self.construct_dominator_tree()
@@ -736,7 +733,7 @@ class FlattenBasicBlocks:
         self.cfg: ControlFlowGraph = cfg
         self.succ: Dict[MIRInstId, List[MIRInstId]] = defaultdict(list)
         self.edges: List[Tuple[MIRInstId, MIRInstId]] = [ ]
-        self.exec_flow: Dict[Tuple[BasicBlockId, BasicBlockId], BranchType] = { }
+        self.exec_flow: Dict[Tuple[MIRInstId, MIRInstId], bool] = { }
 
     def _handle_block(self, block: BasicBlock):
         insts = block.insts.ret_insts()
@@ -745,7 +742,7 @@ class FlattenBasicBlocks:
             self.succ[inst.id].append(insts[idx].id)
             edge = (inst.id, insts[idx].id)
             self.edges.append(edge)
-            self.exec_flow[edge] = BranchType.UN_COND
+            # self.exec_flow[edge] = BranchType.UN_COND
 
 
         last_inst = insts[-1]
@@ -761,7 +758,7 @@ class FlattenBasicBlocks:
             self.succ[last_inst.id].append(first_inst.id)
             edge = (last_inst.id, first_inst.id)
             self.edges.append(edge)
-            self.exec_flow[edge] = BranchType.FALSE if find_false_branch else BranchType.TRUE
+            self.exec_flow[edge] = False if find_false_branch else True
             self._handle_block(block)
 
     def flatten_blocks(self):

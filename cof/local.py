@@ -1,0 +1,35 @@
+from typing import Optional
+
+from cof.analysis.loop import LoopAnalyzer
+from cof.analysis.ssa import SSAEdgeBuilder
+from cof.cfg import ControlFlowGraph
+from cof.early.sccp import sccp_analysis, SCCPAnalyzer
+from cof.early.const_folding import constant_folding
+from cof.ir.mir import MIRInsts
+
+
+class LocalCodeOptimizer:
+    def __init__(self, **kwargs):
+        self.insts: MIRInsts = kwargs['insts']
+        self.cfg: Optional[ControlFlowGraph] = None
+        self.loop_analyzer: Optional[LoopAnalyzer] = None
+        self.ssa_edge_builder: Optional[SSAEdgeBuilder] = None
+
+    def initialize(self):
+        # control flow graph
+        self.cfg = ControlFlowGraph(self.insts)
+        self.cfg.initialize()
+
+        # loop analyzer
+        self.loop_analyzer = LoopAnalyzer(self.cfg)
+        self.loop_analyzer.analyze_loops()
+
+    def optimize(self):
+        # SSA computing
+        self.cfg.minimal_ssa()
+        self.ssa_edge_builder = self.cfg.ssa_edges_comp(self.loop_analyzer)
+
+        sccp_analyzer: SCCPAnalyzer = sccp_analysis(self.cfg, self.ssa_edge_builder)
+        constant_folding(sccp_analyzer)
+
+

@@ -2,18 +2,17 @@ from typing import Dict, List, Tuple
 
 from cof.analysis.ssa import SSAEdgeBuilder, SSAVariable
 from cof.cfg import ControlFlowGraph, FlattenBasicBlocks
-from cof.cfg.bb import BasicBlockId, BranchType
 from cof.ir.lattice import ConstLattice
-from cof.ir.mir import MIRInst, OperandType, MIRInstId, Operand, mir_eval
+from cof.ir.mir import MIRInst, MIRInstId, Operand, mir_eval, MIRInsts
 
 
-class SCCPOptimizer:
+class SCCPAnalyzer:
     def __init__(self, cfg: ControlFlowGraph, ssa_builder: SSAEdgeBuilder):
         self.cfg: ControlFlowGraph = cfg
         self.ssa_builder: SSAEdgeBuilder = ssa_builder
 
         # exec_flag[(a, b)] records whether flowgraph edge a -> b is executable.
-        self.exec_flag: Dict[Tuple[BasicBlockId, BasicBlockId], bool] = { }
+        self.exec_flag: Dict[Tuple[MIRInstId, MIRInstId], bool] = { }
         # lat_cell[ssa_v] records ConstLattice which relates ssa_v in the exit
         # of the node defined SSAVariable ssa_v
         self.lat_cell: Dict[str, ConstLattice] = { }
@@ -24,8 +23,22 @@ class SCCPOptimizer:
         self.fatten_blocks: FlattenBasicBlocks = FlattenBasicBlocks(cfg)
         self._build()
 
+    # ++++++++ Run ++++++++
     def _build(self):
         self.fatten_blocks.flatten_blocks()
+
+    def initialize(self):
+        first_inst_id = self.cfg.insts.ret_inst_by_idx(0).id
+        self.flow_wl = set()
+        self.flow_wl.add((first_inst_id, self.flow_succ(first_inst_id).pop()))
+        self.ssa_wl = set ()
+
+        for p in self.fatten_blocks.edges:
+            self.exec_flag[p[0], p[1]] = False
+
+        for i in self.cfg.insts.ret_insts():
+            if i.is_assignment():
+                self.lat_cell[str(i.result.value)] = ConstLattice()
 
     def run(self):
         while self.flow_wl or self.ssa_wl:
@@ -54,6 +67,8 @@ class SCCPOptimizer:
                 elif self.edge_count(b, self.fatten_blocks.edges) >= 1:
                     self.visit_inst(b, self.inst(b), self.fatten_blocks.exec_flow)
 
+
+    # ++++++++ Helper ++++++++
     def flow_succ_edge(self, mir_id: MIRInstId) -> set[Tuple[MIRInstId, MIRInstId]]:
         s = set()
         succ_inst_id_list = self.fatten_blocks.succ[mir_id]
@@ -63,7 +78,6 @@ class SCCPOptimizer:
 
     def flow_succ(self, mir_id: MIRInstId) -> List[MIRInstId]:
         return self.fatten_blocks.succ[mir_id]
-
 
     def ssa_succ_edge(self, mir_id: MIRInstId) -> set[Tuple[MIRInstId, MIRInstId]]:
         s = set()
@@ -75,28 +89,42 @@ class SCCPOptimizer:
     def ssa_succ(self, mir_id: MIRInstId) -> List[MIRInstId]:
         return self.ssa_builder.succ[mir_id]
 
+    def edge_count(self, b: MIRInstId, edges: List[Tuple[MIRInstId, MIRInstId]]) -> int:
+        """
+        return number of executable flowgraph edges leading to b
+
+        :param b:
+        :param edges:
+        :return:
+        """
+        i: int = 0
+        for e in edges:
+            if e[1] == b and self.exec_flag[e]:
+                i += 1
+
+        return i
+
     def inst(self, mir_id: MIRInstId) -> MIRInst:
         return self.cfg.insts_dict_by_id[mir_id]
 
-    def initialize(self):
-        first_inst_id = self.cfg.insts.ret_inst_by_idx(0).id
-        self.flow_wl = set()
-        self.flow_wl.add((first_inst_id, self.flow_succ(first_inst_id).pop()))
-        self.ssa_wl = set ()
+    def get_insts(self) -> MIRInsts:
+        return self.cfg.insts
 
-        for p in self.fatten_blocks.edges:
-            self.exec_flag[p[0], p[1]] = False
-
-        for i in self.cfg.insts.ret_insts():
-            if i.is_assignment():
-                self.lat_cell[str(i.result.value)] = ConstLattice()
-
+    # +++++++ Eval +++++++
     def lat_eval(self, inst: MIRInst) -> ConstLattice:
         """
-        1. if inst is a call or phi, operand_list is empty list.
-        the c is top.
-        2. if inst is a direct evaluatable inst, we can evaluate c,
-        then return it.
+        If inst is call, phi or anything else that can't directly evaluatable,
+        we set c.state TOP and return it. This way be called conservative handing.
+        Because optimizer can't determine the side effects of the callee. So
+        optimizer will assume that the callee may modify any global variables and
+        return arbitrary result.
+
+        But if the callee is pure function(no side effects and only depends
+        on input parameters)or is marked pure function by IR generator, then
+        we can evaluate it.
+
+        And if inst is assignment or if that can evaluatable, we will use
+        constant folding techniques to optimize.
 
         :param inst: any mir insts
         :return: a constant lattice
@@ -109,7 +137,7 @@ class SCCPOptimizer:
         if not inst.is_evaluatable():
             return c
 
-        operand_list: List[Operand] = inst.ret_operand_list_of_exp()
+        operand_list: List[Operand] = inst.get_operand_list_of_evaluation()
         op_cl_list: List[ConstLattice] = [ ]
         for o in operand_list:
             if isinstance(o.value, SSAVariable):
@@ -133,10 +161,10 @@ class SCCPOptimizer:
 
     def visit_phi(self, inst: MIRInst):
         """ process phi node """
-        for var in inst.ret_operand_list():
+        for var in inst.get_operand_list():
             self.lat_cell[str(inst.result.value)] &= (self.lat_cell[str(var.value)])
 
-    def visit_inst(self, k: MIRInstId, inst: MIRInst, exec_flow: Dict[Tuple[MIRInstId, MIRInstId], BranchType]):
+    def visit_inst(self, k: MIRInstId, inst: MIRInst, exec_flow: Dict[Tuple[MIRInstId, MIRInstId], bool]):
         if inst.is_assignment():
             target: str = str(inst.result.value)
         elif inst.is_if() and inst.operand1.is_ssa_var():
@@ -158,8 +186,8 @@ class SCCPOptimizer:
             """ constant """
             if len(k_succ_edges_set) == 2:
                 for succ_edge in k_succ_edges_set:
-                    if (val.is_cond_true() and exec_flow[succ_edge] == BranchType.TRUE) \
-                        or (not val.is_cond_true() and exec_flow[succ_edge] == BranchType.FALSE):
+                    if (val.is_cond_true() and exec_flow[succ_edge] == True) \
+                        or (not val.is_cond_true() and exec_flow[succ_edge] == False):
                         self.flow_wl.add(succ_edge)
 
             elif len(k_succ_edges_set) == 1:
@@ -168,24 +196,10 @@ class SCCPOptimizer:
 
 
 
-    def edge_count(self, b: MIRInstId, edges: List[Tuple[MIRInstId, MIRInstId]]) -> int:
-        """
-        return number of executable flowgraph edges leading to b
 
-        :param b:
-        :param edges:
-        :return:
-        """
-        i: int = 0
-        for e in edges:
-            if e[1] == b and self.exec_flag[e]:
-                i += 1
+def sccp_analysis(cfg: ControlFlowGraph, ssa_builder: SSAEdgeBuilder) -> SCCPAnalyzer:
+    sccp_optimizer = SCCPAnalyzer(cfg, ssa_builder)
+    sccp_optimizer.initialize()
+    sccp_optimizer.run()
 
-        return i
-
-
-def sccp_optimize(cfg: ControlFlowGraph, ssa_builder: SSAEdgeBuilder):
-    optimizer = SCCPOptimizer(cfg, ssa_builder)
-    optimizer.initialize()
-    optimizer.run()
-    pass
+    return sccp_optimizer
