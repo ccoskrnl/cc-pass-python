@@ -12,7 +12,7 @@ class SSAVariable:
         self.version = version if version is not None else -1
 
     def __str__(self):
-        return f"{self.name}-{self.version}"
+        return f"{self.name}#{self.version}"
 
     @property
     def base_name(self) -> str:

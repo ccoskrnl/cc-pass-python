@@ -1,3 +1,4 @@
+from cof.cfg import ControlFlowGraph
 from cof.local import LocalCodeOptimizer
 from cof.cfg.visualizer import visualize_cfg
 from cof.ir.mir import MIRInsts
@@ -7,5 +8,9 @@ if __name__ == "__main__":
     insts: MIRInsts = testing()
     optimizer = LocalCodeOptimizer(insts=insts)
     optimizer.initialize()
-    optimizer.optimize()
+    final_insts = optimizer.optimize()
+    final_insts.print()
+    # final_cfg = ControlFlowGraph(final_insts)
+    # visualize_cfg(final_cfg)
+
     visualize_cfg(optimizer.cfg)

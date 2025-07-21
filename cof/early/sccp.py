@@ -30,7 +30,7 @@ class SCCPAnalyzer:
     def initialize(self):
         first_inst_id = self.cfg.insts.ret_inst_by_idx(0).id
         self.flow_wl = set()
-        self.flow_wl.add((first_inst_id, self.flow_succ(first_inst_id).pop()))
+        self.flow_wl.add((first_inst_id, self.flow_succ(first_inst_id)[0]))
         self.ssa_wl = set ()
 
         for p in self.fatten_blocks.edges:
@@ -47,7 +47,7 @@ class SCCPAnalyzer:
                 # a = e[0]
                 b = e[1]
 
-                # propagate constants along flowgraph edges
+                # Propagate constants along flowgraph edges
                 if not self.exec_flag[e]:
                     self.exec_flag[e] = True
                     if self.inst(b).is_phi():
@@ -56,7 +56,12 @@ class SCCPAnalyzer:
                     elif self.edge_count(b, self.fatten_blocks.edges) == 1:
                         self.visit_inst(b, self.inst(b), self.fatten_blocks.exec_flow)
 
-            # propagate constants along ssa edges
+            # Propagate constants along ssa edges
+            # Handling the dependency relationship between variables. When the
+            # value of a variable changes(for example, from TOP to a constant 5),
+            # all instructions that directly depend on the variable(i.e. instructions
+            # that use the variable) are added to ssa_wl to recalculate the values of
+            # these instructions.
             if self.ssa_wl:
                 e = self.ssa_wl.pop()
                 # a = e[0]
@@ -164,6 +169,8 @@ class SCCPAnalyzer:
         for var in inst.get_operand_list():
             self.lat_cell[str(inst.result.value)] &= (self.lat_cell[str(var.value)])
 
+        self.flow_wl |= self.flow_succ_edge(inst.id)
+
     def visit_inst(self, k: MIRInstId, inst: MIRInst, exec_flow: Dict[Tuple[MIRInstId, MIRInstId], bool]):
         if inst.is_assignment():
             target: str = str(inst.result.value)
@@ -173,6 +180,12 @@ class SCCPAnalyzer:
             return
 
         val: ConstLattice = self.lat_eval(inst)
+
+        # Handling the dependency relationship between variables. When the
+        # value of a variable changes(for example, from TOP to a constant 5),
+        # all instructions that directly depend on the variable(i.e. instructions
+        # that use the variable) are added to ssa_wl to recalculate the values of
+        # these instructions.
         if val != self.lat_cell[target]:
             self.lat_cell[target] &= val
             self.ssa_wl |= self.ssa_succ_edge(inst.id)

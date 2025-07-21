@@ -182,7 +182,7 @@ class Operand:
         }.get(self.type, self._format_const)
         return formatter()
     def _format_addr(self):
-        return f"addr_{self.value}"
+        return f"addr-{self.value}"
     def _format_const(self):
         return str(self.value)
     def _val(self, operand: 'Operand'):
@@ -310,13 +310,13 @@ class MIRInst:
             Op.PHI: self._format_phi
         }.get(self.op, self._format_operator)
 
-        # return f"[ID:{self.id}]    {formatter()}"
-        return formatter()
+        return f"[ID:{self.id}]    {formatter()}"
+        # return formatter()
 
     def _format_branch(self):
         return f"if {_val(self.operand1)} goto {_val(self.result)}"
     def _format_jump(self):
-        return f"goto addr_{_val(self.result)}"
+        return f"goto {_val(self.result)}"
     def _format_assign(self):
         return f"{_val(self.result)} := {_val(self.operand1)}"
     def _format_entry_exit(self):
@@ -363,11 +363,14 @@ class MIRInst:
     def get_dest_var(self):
         # assert self.result.type == OperandType.VAR
         if self.op in Assignment_Op:
-            return self.result.value if self.result else None
-        elif self.is_if():
             assert self.result
-            return self.operand1.value
+            return self.result
+            # return self.result.value if self.result else None
+        elif self.is_if():
+            assert self.operand1
+            return self.operand1
         return None
+
     def get_operand_list_of_evaluation(self) -> List[Operand]:
         l: List[Operand] = []
         if self.is_assignment():
@@ -411,6 +414,11 @@ class MIRInst:
                 return False
         return True
 
+    def if_to_goto(self):
+        assert self.is_if()
+        self.op = Op.GOTO
+        self.operand1 = None
+        self.operand2 = None
 
 class MIRInsts:
     def __init__(self, insts:Optional[List[MIRInst]]):
@@ -423,11 +431,23 @@ class MIRInsts:
 
         self.phi_insts_idx_end: int = 0
 
-    def inst_exist(self, inst: MIRInst) -> bool:
-        for i in self.ret_insts():
-            if i == inst:
+    # def inst_exist(self, inst: MIRInst) -> bool:
+    #     for i in self.ret_insts():
+    #         if i == inst:
+    #             return True
+    #     return False
+    def inst_exist(self, predicate: Callable[[MIRInst], bool]) -> bool:
+        for inst in self.ir_insts:
+            if predicate(inst):
                 return True
         return False
+
+    def inst_exist_by_key(self, *, key: str, value: Any) -> bool:
+        for inst in self.ir_insts:
+            if getattr(inst, key) == value:
+                return True
+        return False
+
     def inst_exist_by_id(self, inst_id: int) -> bool:
         for i in self.ret_insts():
             if i.id == inst_id:
@@ -466,6 +486,10 @@ class MIRInsts:
                 return inst
         return None
 
+    def index_for_inst(self, inst: MIRInst) -> int:
+        return self.ir_insts.index(inst)
+
+
     def ret_inst_by_idx(self, index: int) -> MIRInst:
         return self.ir_insts[index]
     def ret_insts_by_pos(self, start_pos: int, end_pos: int) -> List[MIRInst]:
@@ -476,3 +500,10 @@ class MIRInsts:
         return self.ir_insts[: self.phi_insts_idx_end]
     def ret_ordinary_insts(self) -> List[MIRInst]:
         return self.ir_insts[self.phi_insts_idx_end:]
+
+    def highset_addr(self) -> int:
+        return self.ir_insts[-1].addr
+
+    def print(self):
+        for inst in self.ir_insts:
+            print(inst)

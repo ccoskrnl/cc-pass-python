@@ -30,9 +30,11 @@ class BasicBlock:
         # self.phi_insts_idx_end = 0
         if insts:
             self.insts: Optional[MIRInsts] = MIRInsts(insts)
+            self.first_ordinary_inst: Optional[MIRInst] = insts[0]
             self.tag: str = "B" + str(bb_id) + "[addr " + str(self.insts.ret_inst_by_idx(-1).addr) + "]"
         else:
             self.insts: Optional[MIRInsts] = None
+            self.first_ordinary_inst: Optional[MIRInst] = None
             self.tag: str = ""
 
 
