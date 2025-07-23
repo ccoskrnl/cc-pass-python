@@ -65,11 +65,11 @@ class Parser:
         token_sequence: List[Token] = [ ]
 
         for value in tokens:
-            if value in {'entry', 'exit', 'if', 'goto', 'print'}:
+            if value in OP_KEYWORDS:
                 token_sequence.append(Token(TokenType.OP, get_op_type(value)))
-            elif value == 'false':
+            elif value == BOOL_FALSE_VALUE:
                 token_sequence.append(Token(TokenType.BOOL, False))
-            elif value == 'true':
+            elif value == BOOL_TRUE_VALUE:
                 token_sequence.append(Token(TokenType.BOOL, True))
             elif re.match(OP_PATTERN, value):
                 token_sequence.append(Token(TokenType.OP, get_op_type(value)))
@@ -253,10 +253,21 @@ class Parser:
         # print operand
         elif (
             len(token_seq) == 2
-            and (token_seq[0].is_print() or token_seq[1].is_value())
+            and (token_seq[0].is_print() and token_seq[1].is_value())
         ):
             inst.op = Op.PRINT
             inst.operand1 = Operand(
+                token_type_to_operand_type(token_seq[1].token_type)
+                , token_seq[1].value
+            )
+
+        # init operand
+        elif (
+            len(token_seq) == 2
+            and (token_seq[0].is_init() and token_seq[1].is_value())
+        ):
+            inst.op = Op.INIT
+            inst.result = Operand(
                 token_type_to_operand_type(token_seq[1].token_type)
                 , token_seq[1].value
             )

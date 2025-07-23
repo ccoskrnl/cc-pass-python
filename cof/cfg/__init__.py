@@ -54,12 +54,19 @@ class ControlFlowGraph:
 
         # The Set type guarantees that there are no identical elements.
         leaders_set_by_addr = set()
+        # leaders_set_by_addr.add(0)
 
         for inst in self.insts.ret_insts():
             match inst.op:
                 case Op.ENTRY:
                     leaders_set_by_addr.add(inst.addr)
-                    leaders_set_by_addr.add(inst.addr + 1)
+                    offset = 1
+                    for instruction in self.insts.ret_insts()[1:]:
+                        if instruction.is_init():
+                            offset += 1
+                        else:
+                            break
+                    leaders_set_by_addr.add(inst.addr + offset)
                 case Op.EXIT:
                     leaders_set_by_addr.add(inst.addr)
 

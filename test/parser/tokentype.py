@@ -22,7 +22,10 @@ class TokenType(Enum):
 
 
 
-KEYWORDS = {'if', 'goto', 'entry', 'exit', 'true', 'false', 'print'}
+KEYWORDS = {'%if', '%goto', '%entry', '%exit', '%true', '%false', '%print', '%init'}
+OP_KEYWORDS = {'%if', '%goto', '%entry', '%exit', '%print', '%init'}
+BOOL_TRUE_VALUE = "%true"
+BOOL_FALSE_VALUE = "%false"
 
 # C-like variable
 VAR_NAME_PATTERN = re.compile(r'^[A-Za-z_][A-Za-z0-9_]*')
@@ -52,11 +55,12 @@ OP_MAP = {
     "-": Op.SUB,
     "*": Op.MUL,
     "/": Op.DIV,
-    "if": Op.IF,
-    "goto": Op.GOTO,
-    "exit": Op.EXIT,
-    "entry": Op.ENTRY,
-    "print": Op.PRINT
+    "%if": Op.IF,
+    "%goto": Op.GOTO,
+    "%exit": Op.EXIT,
+    "%entry": Op.ENTRY,
+    "%init": Op.INIT,
+    "%print": Op.PRINT
 }
 
 def get_op_type(op_token: str):
@@ -103,6 +107,9 @@ class Token:
 
     def is_label(self):
         return self.token_type == TokenType.ADDR
+
+    def is_init(self):
+        return self.token_type == TokenType.OP and self.value == Op.INIT
 
     def is_entry(self):
         return self.token_type == TokenType.OP and self.value == Op.ENTRY

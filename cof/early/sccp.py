@@ -159,14 +159,15 @@ class SCCPAnalyzer:
             c.set_constant(result)
         elif len(op_cl_list) == 1 and op_cl_list[0].value:
             return op_cl_list[0]
-        else:
-            for cl in op_cl_list:
-                c &= cl
+        # else:
+        #     for cl in op_cl_list:
+        #         c &= cl
         return c
 
     def visit_phi(self, inst: MIRInst):
         """ process phi node """
-        for var in inst.get_operand_list():
+        var_list = inst.get_operand_list()
+        for var in var_list:
             self.lat_cell[str(inst.result.value)] &= (self.lat_cell[str(var.value)])
 
         self.flow_wl |= self.flow_succ_edge(inst.id)

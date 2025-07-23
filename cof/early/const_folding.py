@@ -22,5 +22,5 @@ def constant_folding(sccp_analyzer: SCCPAnalyzer):
             dest_var.type = ret_val.type
             dest_var.value = ret_val.value
 
-        if inst.is_if() and dest_var.is_true():
-            inst.if_to_goto()
+        # if inst.is_if() and dest_var.is_true():
+        #     inst.if_to_goto()

@@ -1,23 +1,23 @@
-from enum import Enum
+from enum import Enum, auto
 from typing import List, Optional, Union, Any, Callable
 
 
 class OperandType(Enum):
-    VOID = 0
+    VOID = auto()
 
-    VAR = 1
-    SSA_VAR = 2
+    VAR = auto()
+    SSA_VAR = auto()
 
-    BOOL = 10
-    FLOAT = 11
-    INT = 12
-    STR = 13
+    BOOL = auto()
+    FLOAT = auto()
+    INT = auto()
+    STR = auto()
 
-    PTR = 30
+    PTR = auto()
 
-    ARGS = 40
+    ARGS = auto()
 
-    UNKNOWN = 99
+    UNKNOWN = auto()
 
 Operand_Type_Str_Map = {
     OperandType.VOID : "void",
@@ -73,33 +73,34 @@ PTR = Type(OperandType.PTR)
 
 
 class Op(Enum):
-    ADD = 1
-    SUB = 2
-    MUL = 3
-    DIV = 4
+    ADD = auto()
+    SUB = auto()
+    MUL = auto()
+    DIV = auto()
 
-    IF = 5
-    GOTO = 6
+    IF = auto()
+    GOTO = auto()
 
-    ASSIGN = 7
+    ASSIGN = auto()
 
-    LEQ = 8
-    GEQ = 9
-    LE = 10
-    GE = 11
-    EQ = 12
-    NEQ = 13
+    LEQ = auto()
+    GEQ = auto()
+    LE = auto()
+    GE = auto()
+    EQ = auto()
+    NEQ = auto()
 
-    PHI = 77
+    PHI = auto()
 
-    CALL = 90
-    CALL_ASSIGN = 91
+    CALL = auto()
+    CALL_ASSIGN = auto()
 
-    PRINT = 96
-    ENTRY = 97
-    EXIT = 98
+    PRINT = auto()
+    INIT = auto()
+    ENTRY = auto()
+    EXIT = auto()
 
-    UNKNOWN = 99
+    UNKNOWN = auto()
 
 Arithmetic_Op = {
     Op.ADD, Op.SUB, Op.MUL, Op.DIV,
@@ -110,26 +111,33 @@ Bool_Op = {
     Op.LEQ, Op.GEQ, Op.LE, Op.GE, Op.EQ, Op.NEQ
 }
 # All evaluatable expressions.
-Exp_Op = {
+Evaluatable_Op = {
     Op.ADD, Op.SUB, Op.MUL, Op.DIV,
     Op.ASSIGN,
     Op.LEQ, Op.GEQ, Op.LE, Op.GE, Op.EQ, Op.NEQ,
     Op.IF
 }
+Expression_Op = {
+    Op.ADD, Op.SUB, Op.MUL, Op.DIV,
+    Op.ASSIGN,
+    Op.LEQ, Op.GEQ, Op.LE, Op.GE, Op.EQ, Op.NEQ,
+}
+
 # All operators with assignment operation
 Assignment_Op = {
     Op.ADD, Op.SUB, Op.MUL, Op.DIV,
     Op.ASSIGN,
     Op.LEQ, Op.GEQ, Op.LE, Op.GE, Op.EQ, Op.NEQ,
-    Op.PHI, Op.CALL_ASSIGN
+    Op.PHI, Op.CALL_ASSIGN,
+    Op.INIT,
 }
 OP_STR_MAP = {
     Op.ADD: "+",
     Op.SUB: "-",
     Op.MUL: "*",
     Op.DIV: "/",
-    Op.IF: "if",
-    Op.GOTO: "goto",
+    Op.IF: "%if",
+    Op.GOTO: "%goto",
     Op.ASSIGN: ":=",
     Op.LEQ: "<=",
     Op.GEQ: ">=",
@@ -138,9 +146,10 @@ OP_STR_MAP = {
     Op.EQ: "=",
     Op.NEQ: "!=",
     Op.PHI: "φ",
-    Op.ENTRY: "entry",
-    Op.EXIT: "exit",
-    Op.PRINT: "print"
+    Op.ENTRY: "%entry",
+    Op.EXIT: "%exit",
+    Op.PRINT: "%print",
+    Op.INIT: "%init",
 }
 def op_str(op: Op) -> str:
     """Return string representation of operator"""
@@ -307,22 +316,25 @@ class MIRInst:
             Op.EXIT: self._format_entry_exit,
             Op.PRINT: self._format_print,
             Op.CALL: self._format_call,
-            Op.PHI: self._format_phi
+            Op.PHI: self._format_phi,
+            Op.INIT: self._format_init
         }.get(self.op, self._format_operator)
 
         return f"[ID:{self.id}]    {formatter()}"
         # return formatter()
 
+    def _format_init(self):
+        return f"%init {_val(self.result)}"
     def _format_branch(self):
-        return f"if {_val(self.operand1)} goto {_val(self.result)}"
+        return f"%if {_val(self.operand1)} %goto {_val(self.result)}"
     def _format_jump(self):
-        return f"goto {_val(self.result)}"
+        return f"%goto {_val(self.result)}"
     def _format_assign(self):
         return f"{_val(self.result)} := {_val(self.operand1)}"
     def _format_entry_exit(self):
         return op_str(self.op)
     def _format_print(self):
-        return f"print {_val(self.operand1)}"
+        return f"%print {_val(self.operand1)}"
     def _format_operator(self):
         op_symbol = op_str(self.op)
         return (
@@ -350,15 +362,19 @@ class MIRInst:
         )
 
     def is_evaluatable(self) -> bool:
-        return True if self.op in Exp_Op else False
+        return True if self.op in Evaluatable_Op else False
     def is_assignment(self) -> bool:
         return True if self.op in Assignment_Op else False
+    def is_exp(self) -> bool:
+        return True if self.op in Expression_Op else False
     def is_if(self) -> bool:
         return True if self.op == Op.IF else False
     def is_call(self) -> bool:
         return True if self.op == Op.CALL or self.op == Op.CALL_ASSIGN else False
     def is_phi(self) -> bool:
         return True if self.op == Op.PHI else False
+    def is_init(self) -> bool:
+        return True if self.op == Op.INIT else False
 
     def get_dest_var(self):
         # assert self.result.type == OperandType.VAR
@@ -373,7 +389,7 @@ class MIRInst:
 
     def get_operand_list_of_evaluation(self) -> List[Operand]:
         l: List[Operand] = []
-        if self.is_assignment():
+        if self.is_exp():
             l.append(self.operand1)
             if self.operand2:
                 l.append(self.operand2)
@@ -387,6 +403,7 @@ class MIRInst:
         assert self.op == Op.CALL or self.op == Op.PHI or self.op == Op.CALL_ASSIGN
         assert self.operand2.type == OperandType.ARGS
         return self.operand2.value.args
+
     def get_operand_list(self) -> List[Operand]:
         l: List[Operand] = []
 
@@ -396,7 +413,7 @@ class MIRInst:
         elif self.is_call():
             l = self.get_call_arg_list()
 
-        elif self.is_assignment():
+        elif self.is_exp():
             l.append(self.operand1)
             if self.operand2:
                 l.append(self.operand2)

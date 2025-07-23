@@ -60,10 +60,9 @@ class ConstLattice:
         if other.is_top():
             return self
 
-        if self.value == other.value:
-            return self
-        else:
-            self.state = LatticeState.BOTTOM
+        if self.is_constant() and self.is_constant():
+            if self.value != other.value:
+                self.set_bottom()
 
         return self
 

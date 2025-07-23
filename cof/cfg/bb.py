@@ -31,11 +31,11 @@ class BasicBlock:
         if insts:
             self.insts: Optional[MIRInsts] = MIRInsts(insts)
             self.first_ordinary_inst: Optional[MIRInst] = insts[0]
-            self.tag: str = "B" + str(bb_id) + "[addr " + str(self.insts.ret_inst_by_idx(-1).addr) + "]"
+            # self.tag: str = "B" + str(bb_id) + "[addr " + str(self.insts.ret_inst_by_idx(-1).addr) + "]"
         else:
             self.insts: Optional[MIRInsts] = None
             self.first_ordinary_inst: Optional[MIRInst] = None
-            self.tag: str = ""
+            # self.tag: str = ""
 
 
         # self.num_of_insts = (end_idx - start_idx)
@@ -62,6 +62,16 @@ class BasicBlock:
 
         self.dominator_tree_parent: Optional['BasicBlock'] = None
         self.dominator_tree_children_id: List[int] = [ ]
+
+    @property
+    def tag(self) -> str:
+        start_addr = -1
+        for inst in self.insts.ret_insts():
+            if not inst.is_phi():
+                start_addr = inst.addr
+                break
+
+        return "B" + str(self.id) + "[addr " + str(start_addr) + "]"
 
     def __hash__(self):
         return hash(self.id)

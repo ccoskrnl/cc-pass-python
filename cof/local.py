@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, final
 
 from cof.analysis.loop import LoopAnalyzer
 from cof.analysis.ssa import SSAEdgeBuilder
@@ -29,12 +29,13 @@ class LocalCodeOptimizer:
         # SSA computing
         self.cfg.minimal_ssa()
         self.ssa_edge_builder = self.cfg.ssa_edges_comp(self.loop_analyzer)
+        final_insts = MIRInsts(None)
 
 
         sccp_analyzer: SCCPAnalyzer = sccp_analysis(self.cfg, self.ssa_edge_builder)
-        constant_folding(sccp_analyzer)
-        dce_insts = control_flow_dce(sccp_analyzer)
-
-        final_insts = dce_insts
+        # constant_folding(sccp_analyzer)
+        # dce_insts = control_flow_dce(sccp_analyzer)
+        #
+        # final_insts = dce_insts
         return final_insts
 
