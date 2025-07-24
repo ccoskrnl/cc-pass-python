@@ -1,3 +1,4 @@
+from collections import deque
 from typing import Dict, List, Tuple
 
 from cof.analysis.ssa import SSAEdgeBuilder, SSAVariable
@@ -17,8 +18,11 @@ class SCCPAnalyzer:
         # of the node defined SSAVariable ssa_v
         self.lat_cell: Dict[str, ConstLattice] = { }
 
-        self.flow_wl: set[Tuple[MIRInstId, MIRInstId]] = set()
-        self.ssa_wl: set[Tuple[MIRInstId, MIRInstId]] = set()
+        self.flow_wl: deque[Tuple[MIRInstId, MIRInstId]] = deque()
+        self.ssa_wl: deque[Tuple[MIRInstId, MIRInstId]] = deque()
+
+        # self.flow_wl: set[Tuple[MIRInstId, MIRInstId]] = set()
+        # self.ssa_wl: set[Tuple[MIRInstId, MIRInstId]] = set()
 
         self.fatten_blocks: FlattenBasicBlocks = FlattenBasicBlocks(cfg)
         self._build()
@@ -29,9 +33,12 @@ class SCCPAnalyzer:
 
     def initialize(self):
         first_inst_id = self.cfg.insts.ret_inst_by_idx(0).id
-        self.flow_wl = set()
-        self.flow_wl.add((first_inst_id, self.flow_succ(first_inst_id)[0]))
-        self.ssa_wl = set ()
+        # self.flow_wl = []
+        self.flow_wl.append((first_inst_id, self.flow_succ(first_inst_id)[0]))
+        # self.ssa_wl = []
+        # self.flow_wl = set()
+        # self.flow_wl.add((first_inst_id, self.flow_succ(first_inst_id)[0]))
+        # self.ssa_wl = set ()
 
         for p in self.fatten_blocks.edges:
             self.exec_flag[p[0], p[1]] = False
@@ -43,7 +50,7 @@ class SCCPAnalyzer:
     def run(self):
         while self.flow_wl or self.ssa_wl:
             if self.flow_wl:
-                e = self.flow_wl.pop()
+                e = self.flow_wl.popleft()
                 # a = e[0]
                 b = e[1]
 
@@ -63,7 +70,7 @@ class SCCPAnalyzer:
             # that use the variable) are added to ssa_wl to recalculate the values of
             # these instructions.
             if self.ssa_wl:
-                e = self.ssa_wl.pop()
+                e = self.ssa_wl.popleft()
                 # a = e[0]
                 b = e[1]
 
@@ -167,10 +174,18 @@ class SCCPAnalyzer:
     def visit_phi(self, inst: MIRInst):
         """ process phi node """
         var_list = inst.get_operand_list()
+        new_value = ConstLattice()
         for var in var_list:
-            self.lat_cell[str(inst.result.value)] &= (self.lat_cell[str(var.value)])
+            new_value &= (self.lat_cell[str(var.value)])
 
-        self.flow_wl |= self.flow_succ_edge(inst.id)
+        if new_value != self.lat_cell[str(inst.result.value)]:
+            self.lat_cell[str(inst.result.value)] &= new_value
+
+            for succ_id in self.flow_succ(inst.id):
+                self.flow_wl.append((inst.id, succ_id))
+            for user in self.ssa_succ(inst.id):
+                self.ssa_wl.append((inst.id, user))
+        # self.flow_wl |= self.flow_succ_edge(inst.id)
 
     def visit_inst(self, k: MIRInstId, inst: MIRInst, exec_flow: Dict[Tuple[MIRInstId, MIRInstId], bool]):
         if inst.is_assignment():
@@ -178,6 +193,9 @@ class SCCPAnalyzer:
         elif inst.is_if() and inst.operand1.is_ssa_var():
             target: str = str(inst.operand1.value)
         else:
+            succ = self.flow_succ(k)
+            if succ:
+                self.flow_wl.append((k, succ[0]))
             return
 
         val: ConstLattice = self.lat_eval(inst)
@@ -189,12 +207,18 @@ class SCCPAnalyzer:
         # these instructions.
         if val != self.lat_cell[target]:
             self.lat_cell[target] &= val
-            self.ssa_wl |= self.ssa_succ_edge(inst.id)
+
+            for succ_id in self.ssa_succ(inst.id):
+                self.ssa_wl.append((inst.id, succ_id))
+
+            # self.ssa_wl |= self.ssa_succ_edge(inst.id)
 
         k_succ_edges_set = self.flow_succ_edge(k)
 
         if val.is_top():
-            self.flow_wl |= k_succ_edges_set
+            for succ_edge in k_succ_edges_set:
+                self.flow_wl.append(succ_edge)
+            # self.flow_wl |= k_succ_edges_set
 
         elif not val.is_bottom():
             """ constant """
@@ -202,10 +226,12 @@ class SCCPAnalyzer:
                 for succ_edge in k_succ_edges_set:
                     if (val.is_cond_true() and exec_flow[succ_edge] == True) \
                         or (not val.is_cond_true() and exec_flow[succ_edge] == False):
-                        self.flow_wl.add(succ_edge)
+                        self.flow_wl.append(succ_edge)
+                        # self.flow_wl.add(succ_edge)
 
             elif len(k_succ_edges_set) == 1:
-                self.flow_wl |= k_succ_edges_set
+                self.flow_wl.append(k_succ_edges_set.pop())
+                # self.flow_wl |= k_succ_edges_set
 
 
 

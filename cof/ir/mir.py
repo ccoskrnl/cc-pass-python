@@ -372,6 +372,8 @@ class MIRInst:
         return True if self.op in Expression_Op else False
     def is_if(self) -> bool:
         return True if self.op == Op.IF else False
+    def is_goto(self) -> bool:
+        return True if self.op == Op.GOTO else False
     def is_call(self) -> bool:
         return True if self.op == Op.CALL or self.op == Op.CALL_ASSIGN else False
     def is_phi(self) -> bool:
