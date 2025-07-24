@@ -55,6 +55,7 @@ OP_MAP = {
     "-": Op.SUB,
     "*": Op.MUL,
     "/": Op.DIV,
+    "%": Op.MOD,
     "%if": Op.IF,
     "%goto": Op.GOTO,
     "%exit": Op.EXIT,

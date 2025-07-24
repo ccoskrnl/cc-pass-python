@@ -433,6 +433,10 @@ class ControlFlowGraph:
             worklist = deque(def_sites[varname])
             even_on_worklist = set(def_sites[varname])
 
+            # if the variable only be defined once, then we're done.
+            if len(even_on_worklist) == 1:
+                continue
+
             # handle worklist iteratively
             while worklist:
                 # extract current define block id

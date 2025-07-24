@@ -1,0 +1,29 @@
+    %entry
+    %init n
+
+    sum := 0
+    i := 0
+    %goto &L1
+
+L1:
+    cond1 := i < n
+    %if cond1 %goto &L2
+    %goto &L_exit
+
+L2:
+    t1 := i % 2
+    cond2 := t1 = 0
+    %if cond2 %goto &L_even
+    t2 := 2 * i
+    sum := sum + t2
+    %goto &L_update
+
+L_even:
+    sum := sum + i
+
+L_update:
+    i := i + 1
+    %goto &L1
+
+L_exit:
+    %exit

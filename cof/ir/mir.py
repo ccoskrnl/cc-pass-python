@@ -73,6 +73,7 @@ PTR = Type(OperandType.PTR)
 
 
 class Op(Enum):
+    MOD = auto()
     ADD = auto()
     SUB = auto()
     MUL = auto()
@@ -103,7 +104,7 @@ class Op(Enum):
     UNKNOWN = auto()
 
 Arithmetic_Op = {
-    Op.ADD, Op.SUB, Op.MUL, Op.DIV,
+    Op.ADD, Op.SUB, Op.MUL, Op.DIV, Op.MOD,
     Op.LEQ, Op.GEQ, Op.LE, Op.GE, Op.EQ, Op.NEQ,
 }
 # bool op
@@ -112,20 +113,20 @@ Bool_Op = {
 }
 # All evaluatable expressions.
 Evaluatable_Op = {
-    Op.ADD, Op.SUB, Op.MUL, Op.DIV,
+    Op.ADD, Op.SUB, Op.MUL, Op.DIV, Op.MOD,
     Op.ASSIGN,
     Op.LEQ, Op.GEQ, Op.LE, Op.GE, Op.EQ, Op.NEQ,
     Op.IF
 }
 Expression_Op = {
-    Op.ADD, Op.SUB, Op.MUL, Op.DIV,
+    Op.ADD, Op.SUB, Op.MUL, Op.DIV, Op.MOD,
     Op.ASSIGN,
     Op.LEQ, Op.GEQ, Op.LE, Op.GE, Op.EQ, Op.NEQ,
 }
 
 # All operators with assignment operation
 Assignment_Op = {
-    Op.ADD, Op.SUB, Op.MUL, Op.DIV,
+    Op.ADD, Op.SUB, Op.MUL, Op.DIV, Op.MOD,
     Op.ASSIGN,
     Op.LEQ, Op.GEQ, Op.LE, Op.GE, Op.EQ, Op.NEQ,
     Op.PHI, Op.CALL_ASSIGN,
@@ -136,6 +137,7 @@ OP_STR_MAP = {
     Op.SUB: "-",
     Op.MUL: "*",
     Op.DIV: "/",
+    Op.MOD: "%",
     Op.IF: "%if",
     Op.GOTO: "%goto",
     Op.ASSIGN: ":=",
@@ -241,6 +243,7 @@ def mir_eval(op: Op, operand1: Operand, operand2: Operand) -> Operand:
         Op.SUB: lambda a, b: a - b,
         Op.MUL: lambda a, b: a * b,
         Op.DIV: safe_divide,
+        Op.MOD: lambda a, b: a % b,
         Op.LE: lambda a, b: a < b,
         Op.GE: lambda a, b: a > b,
         Op.LEQ: lambda a, b: a <= b,
