@@ -1,10 +1,9 @@
 from abc import ABC, abstractmethod
-from typing import Generic, TypeVar, Optional, Any
+from typing import Generic, Optional, Any
 from enum import Enum
+from typing import TypeVar
 
 T = TypeVar('T')
-B = TypeVar('B')
-
 
 class Semilattice(ABC, Generic[T]):
     """Semi-Lattice"""

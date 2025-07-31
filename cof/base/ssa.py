@@ -1,7 +1,7 @@
 from collections import defaultdict
 from typing import Dict, Tuple
 
-from cof.ir.mir import *
+from cof.base.mir import *
 
 
 class SSAVariable:

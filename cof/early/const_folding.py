@@ -1,6 +1,6 @@
-from cof.early.sccp import SCCPAnalyzer
-from cof.analysis.semilattice import ConstLattice
-from cof.ir.mir import MIRInsts, Operand, mir_eval
+from cof.analysis.sccp import SCCPAnalyzer
+from cof.base.semilattice import ConstLattice
+from cof.base.mir import MIRInsts, Operand, mir_eval
 
 
 def constant_folding(sccp_analyzer: SCCPAnalyzer):

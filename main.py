@@ -1,7 +1,6 @@
-from cof.cfg import ControlFlowGraph
 from cof.local import LocalCodeOptimizer
-from cof.cfg.visualizer import visualize_cfg
-from cof.ir.mir import MIRInsts
+from cof.base.cfg.visualizer import visualize_cfg
+from cof.base.mir import MIRInsts
 from test import testing
 
 if __name__ == "__main__":

@@ -1,7 +1,7 @@
 from collections import defaultdict
 from typing import Optional, List, Dict
 
-from cof.cfg import ControlFlowGraph, BasicBlock, BasicBlockId
+from cof.base.cfg import ControlFlowGraph, BasicBlock, BasicBlockId
 
 
 class Loop:
@@ -69,7 +69,7 @@ class LoopAnalyzer:
 
         # recognize back edges
         header_to_latches: Dict[BasicBlock, List[BasicBlock]] = defaultdict(list)
-        for bb in self.cfg.blocks.values():
+        for bb in self.cfg.block_by_id.values():
             for succ in bb.succ_bbs.values():
                 if self.cfg.ranks[succ.id] < self.cfg.ranks[bb.id]:
                     header_to_latches[succ].append(bb)

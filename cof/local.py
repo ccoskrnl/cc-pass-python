@@ -1,12 +1,11 @@
-from typing import Optional, final
+from typing import Optional
 
 from cof.analysis.loop import LoopAnalyzer
-from cof.analysis.ssa import SSAEdgeBuilder
-from cof.cfg import ControlFlowGraph
-from cof.early.dce import control_flow_dce
-from cof.early.sccp import sccp_analysis, SCCPAnalyzer
+from cof.base.ssa import SSAEdgeBuilder
+from cof.base.cfg import ControlFlowGraph
+from cof.analysis.sccp import sccp_analysis, SCCPAnalyzer
 from cof.early.const_folding import constant_folding
-from cof.ir.mir import MIRInsts
+from cof.base.mir import MIRInsts
 
 
 class LocalCodeOptimizer:

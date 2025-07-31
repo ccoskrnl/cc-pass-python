@@ -1,5 +1,5 @@
 from enum import Enum
-from cof.ir.mir import Op
+from cof.base.mir import Op
 import re
 
 class TokenType(Enum):

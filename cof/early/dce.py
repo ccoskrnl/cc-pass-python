@@ -1,8 +1,8 @@
 # Dead Code Elimination
 from typing import Tuple, Dict
 
-from cof.early.sccp import SCCPAnalyzer
-from cof.ir.mir import MIRInstId, MIRInsts
+from cof.analysis.sccp import SCCPAnalyzer
+from cof.base.mir import MIRInstId, MIRInsts
 
 
 def control_flow_dce(sccp_analyzer: SCCPAnalyzer) -> MIRInsts:
