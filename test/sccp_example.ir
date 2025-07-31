@@ -1,11 +1,11 @@
-    entry
+    %entry
     a := 2
     b := 3
     cond1 := a < b
-    if cond1 goto &L1
+    %if cond1 %goto &L1
     c := 5
-    goto &L2
+    %goto &L2
 L1:
     c := 4
 L2:
-    exit
+    %exit

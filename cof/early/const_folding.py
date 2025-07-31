@@ -1,5 +1,5 @@
 from cof.early.sccp import SCCPAnalyzer
-from cof.ir.lattice import ConstLattice
+from cof.analysis.semilattice import ConstLattice
 from cof.ir.mir import MIRInsts, Operand, mir_eval
 
 
@@ -11,7 +11,7 @@ def constant_folding(sccp_analyzer: SCCPAnalyzer):
         for var in operand_var_list:
             if var.is_ssa_var():
                 lattice: ConstLattice = sccp_analyzer.lat_cell[str(var)]
-                if lattice.is_constant():
+                if lattice.is_constant:
                     var.type = lattice.value.type
                     var.value = lattice.value.value
 

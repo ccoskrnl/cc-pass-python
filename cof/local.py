@@ -33,7 +33,7 @@ class LocalCodeOptimizer:
 
 
         sccp_analyzer: SCCPAnalyzer = sccp_analysis(self.cfg, self.ssa_edge_builder)
-        # constant_folding(sccp_analyzer)
+        constant_folding(sccp_analyzer)
         # dce_insts = control_flow_dce(sccp_analyzer)
         #
         # final_insts = dce_insts

@@ -446,7 +446,7 @@ class ControlFlowGraph:
                 for y in self.df[def_block_id]:
                     y_block = self.blocks[y]
                     # check if y has phi function of v
-                    if not has_phi_for_var(self.blocks[y], varname):
+                    if not has_phi_for_var(y_block, varname):
 
                         # insert phi function as the first inst in y
                         new_phi = create_phi_function(varname, num_pred_s=len(self.pred[y]))
@@ -480,8 +480,8 @@ class ControlFlowGraph:
 
         # We already have built dominator tree.
         # Due to the fact that we set the phi function
-        # in the order of dominating the tree for variable
-        # renaming, for loop structures (with edges),
+        # in the order of visiting dominator tree for variable
+        # renaming, for loop structures (with back edges),
         # the versions of variables are not strictly incremented.
 
         def rename_use_operand(operand: Operand):
@@ -524,7 +524,7 @@ class ControlFlowGraph:
                 v_n = v.base_name
 
                 # construct new varname and assign to phi result
-                counters[v.base_name] += 1
+                counters[v_n] += 1
                 v.version = counters[v_n]
 
                 # add new version into stack
@@ -593,7 +593,7 @@ class ControlFlowGraph:
                         result: SSAVariable = inst_in_cbb.result.value
                         stacks[result.base_name].pop()
                     else:
-                        assert True
+                        raise TypeError("Only Variables or SSAVariables are allowed")
 
             for v in reversed(phi_def_list):
                 stacks[v].pop()
@@ -687,6 +687,7 @@ class ControlFlowGraph:
                             , str(operand.value)))
 
         # stage 3.
+        # handle phi instructions.
         for block in self.blocks.values():
             for phi in block.insts.ret_phi_insts():
 
