@@ -81,6 +81,9 @@ class BasicBlock:
             return False
         return self.id == other.id
 
+    def __str__(self):
+        return self.tag
+
     def add_comment(self, comment: str) -> None:
         self.comment = comment
 

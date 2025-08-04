@@ -4,12 +4,12 @@ from typing import Set, List, Dict
 
 from cof.analysis.dataflow.framework import TransferFunction
 from cof.base.bb import BasicBlock
-from cof.base.mir import MIRInstAddr
+from cof.base.mir import MIRInstAddr, Variable
 from cof.base.semilattice import Semilattice
 
 
 class Definition:
-    def __init__(self, var: str, location: MIRInstAddr):
+    def __init__(self, var: Variable, location: MIRInstAddr):
         self.var = var
         self.location = location
 
@@ -73,5 +73,5 @@ class ReachingDefTransfer(TransferFunction[set[Definition], BasicBlock]):
         return (input_val - self.block_kill.get(block, set())) | \
                 self.block_gen.get(block, set())
 
-def on_state_change(block: BasicBlock, before: set[Definition], after: set[Definition]):
+def reaching_defs_on_state_change(block: BasicBlock, before: set[Definition], after: set[Definition]):
     print(f"Block {block.id}: {{ {", ".join(map(str, before))} }}  --->  {{ {", ".join(map(str, after))} }}")

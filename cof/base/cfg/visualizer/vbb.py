@@ -191,24 +191,17 @@ class EdgeItem(QGraphicsPathItem):
                 end_pos_x - offset_x, end_pos_y - offset_y,
                 end_pos_x, end_pos_y
             )
-        elif self.connection_type == EdgeType.back:
-            mid_x = (start_pos_x + end_pos_x) / 2
-            mid_y = (start_pos_y + end_pos_y) / 2
+        elif self.connection_type == EdgeType.cross:
 
             # 计算偏移量（避免重叠）
-            offset = 40
+            offset = (end_pos_x - (start_pos_x + self.source.width)) / 2
 
-            path.lineTo(start_pos_x, mid_x - offset)
-            path.lineTo(end_pos_x, mid_y - offset)
 
-            jump_radius = 15
-            path.arcTo(
-                end_pos_x - jump_radius,
-                mid_y - offset - jump_radius,
-                jump_radius * 2,
-                jump_radius * 2,
-                180, 180
-            )
+            path.lineTo(start_pos_x, start_pos_y + 40)
+            path.lineTo(end_pos_x - offset - (self.target.width / 2), start_pos_y + 40)
+            path.lineTo(end_pos_x - offset - (self.target.width / 2), end_pos_y - 20)
+            path.lineTo(end_pos_x, end_pos_y - 20)
+
             path.lineTo(end_pos_x, end_pos_y)
 
         self.setPath(path)

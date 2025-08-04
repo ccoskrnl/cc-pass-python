@@ -5,9 +5,9 @@
 L1:
 	i := i + 1
 	j := j - 1
-	%if cond1 %goto &L2
+	%if i %goto &L2
 	a := u2
 L2:
 	i := u3
-	%if cond2 %goto &L1
+	%if i %goto &L1
 	%exit

@@ -1,5 +1,4 @@
 from abc import ABC, abstractmethod
-from collections import deque
 from copy import deepcopy
 from typing import Generic, TypeVar, Dict, Optional, Callable, Iterable
 
@@ -119,19 +118,20 @@ class DataFlowAnalysisFramework(Generic[T, B]):
         max_iterations = len(worklist) * 10         # Heuristic for convergence limit
         iteration_count = 0
 
+        neighbor_getter = self.working_cfg.predecessors
+        affected_block_getter = self.working_cfg.successors
+
         # Configure analysis direction
         if self.direction == 'forward':
             # Forward analysis: propagate from predecessors to successors
             input_states: Dict[B, T] = self.in_states
             output_states: Dict[B, T] = self.out_states
-            neighbor_getter = self.working_cfg.predecessors
-            affected_block_getter = self.working_cfg.successors
         else:
             # Backward analysis: propagate from successors to predecessors
             output_states: Dict[B, T] = self.in_states
             input_states: Dict[B, T] = self.out_states
-            neighbor_getter = self.working_cfg.successors
-            affected_block_getter = self.working_cfg.predecessors
+            # neighbor_getter = self.working_cfg.successors
+            # affected_block_getter = self.working_cfg.predecessors
 
         # Process worklist until convergence or iteration limit
         while worklist and iteration_count < max_iterations:

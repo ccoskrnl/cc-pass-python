@@ -43,9 +43,12 @@ class ControlFlowGraphABC(ABC):
 
 class ControlFlowGraphForDataFlowAnalysis(ControlFlowGraphABC, ABC):
     @abstractmethod
-    def collect_definitions(self) -> Dict[Tuple[str, MIRInstAddr], BasicBlock]:
+    def collect_definitions(self) -> Dict[Tuple[Variable, MIRInstAddr], BasicBlock]:
         pass
 
+    @abstractmethod
+    def collect_use_def(self) -> Tuple[Dict[BasicBlock, set[Variable]], Dict[BasicBlock, set[Variable]]]:
+        pass
 
 class ControlFlowGraph(ControlFlowGraphForDataFlowAnalysis):
     def __init__(self, insts: MIRInsts):
@@ -146,7 +149,7 @@ class ControlFlowGraph(ControlFlowGraphForDataFlowAnalysis):
             found_inst = self.insts.find_inst_by_key(key="addr", value=i)
             if found_inst:
                 block_insts.append(found_inst)
-        self.exit_block = self.new_a_block(self.n_bbs, block_insts)
+        self.exit = self.new_a_block(self.n_bbs, block_insts)
 
         self.root = self.block_by_id[0]
 
@@ -329,8 +332,6 @@ class ControlFlowGraph(ControlFlowGraphForDataFlowAnalysis):
     def all_blocks(self) -> List[BasicBlock]:
         return list(self.block_by_id.values())
 
-    def reverse(self):
-        pass
 
 
     # ++++++++ Dominator ++++++++
@@ -440,13 +441,60 @@ class ControlFlowGraph(ControlFlowGraphForDataFlowAnalysis):
 
 
     # ++++++++ Data-Flow Analysis ++++++++
-    def collect_definitions(self) -> Dict[Tuple[str, MIRInstAddr], BasicBlock]:
+    def collect_definitions(self) -> Dict[Tuple[Variable, MIRInstAddr], BasicBlock]:
         def_dict = { }
         for inst in self.insts.ret_ordinary_insts():
+
+            block = self.block_by_inst_addr.get(inst.addr, None)
+            if not block:
+                continue
+
             if inst.is_assignment():
-                def_dict[(str(inst.get_dest_var()), inst.addr)] = self.block_by_inst_addr[inst.addr]
+                def_dict[(inst.get_dest_var().value, inst.addr)] = block
 
         return def_dict
+
+    def collect_use_def(self) -> Tuple[Dict[BasicBlock, set[Variable]], Dict[BasicBlock, set[Variable]]]:
+        def_dict: Dict[BasicBlock, set[Variable]] = defaultdict(set)
+
+        # undefined before use.
+        use_dict: Dict[BasicBlock, set[Variable]] = defaultdict(set)
+
+        # local definitions
+        # local_def_tracker = defaultdict(set)
+
+        block_defs = defaultdict(set)
+
+        for block in self.all_blocks():
+            for inst in block.insts.ret_ordinary_insts():
+                if inst.is_assignment():
+                    var = inst.get_dest_var().value
+                    def_dict[block].add(var)
+                    block_defs[block].add(var)
+
+        for block in self.all_blocks():
+            local_defs = set()
+            for inst in block.insts.ret_ordinary_insts():
+
+                for operand in inst.get_operand_list():
+                    var = operand.value
+                    if isinstance(var, Variable):
+                        if var not in local_defs and var not in block_defs[block]:
+                            use_dict[block].add(var)
+
+                if inst.is_assignment():
+                    var = inst.get_dest_var().value
+                    local_defs.add(var)
+
+                # TODO: Special handling: Function calls may implicitly
+                #       use global variables
+
+                # if inst.is_call() and inst.modifies_global_state():
+                #     for global_var in self.get_global_variables():
+                #         if global_var not in local_defs:
+                #             use_dict[block].add(global_var)
+
+        return use_dict, def_dict
 
     # ++++++++ SSA ++++++++
     def _dom_front(self):
@@ -872,10 +920,10 @@ class ReversedCFG(ControlFlowGraphABC):
     def exit_block(self) -> BasicBlock:
         return self.original.entry_block()
 
-    def predecessors(self, block_id: BasicBlockId) -> List[BasicBlockId]:
+    def predecessors(self, block_id: BasicBlockId) -> List[BasicBlock]:
         return self.original.successors(block_id)
 
-    def successors(self, block_id: BasicBlockId) -> List[BasicBlockId]:
+    def successors(self, block_id: BasicBlockId) -> List[BasicBlock]:
         return self.original.predecessors(block_id)
 
     def all_blocks(self) -> List[BasicBlock]:
