@@ -12,21 +12,16 @@ class Semilattice(ABC, Generic[T]):
         pass
 
     @abstractmethod
+    def bottom(self) -> T:
+        pass
+
+    @abstractmethod
     def meet(self, other: T) -> T:
         pass
 
     @abstractmethod
-    def is_less_or_equal(self, other: T) -> bool:
+    def is_less_or_equal(self, a: T, b: T) -> bool:
         pass
-
-    @abstractmethod
-    def __iand__(self, other) -> T:
-        pass
-
-    @abstractmethod
-    def __eq__(self, other) -> bool:
-        pass
-
 
 class ConstLatState(Enum):
     # NAC, Not a Constant
@@ -36,7 +31,7 @@ class ConstLatState(Enum):
     # Constant
     CONSTANT = 2,
 
-class ConstLattice(Semilattice):
+class ConstLattice(Semilattice['ConstLattice']):
 
     def __init__(
             self,
@@ -94,12 +89,10 @@ class ConstLattice(Semilattice):
         self.value = None
         return self
 
-
-    def is_less_or_equal(self, other: 'ConstLattice') -> bool:
-        if self.state == other.state or self.is_bottom:
+    def is_less_or_equal(self, a: 'ConstLattice', b: 'ConstLattice') -> bool:
+        if a.state == b.state or a.is_bottom:
             return True
-
-        if self.state == ConstLatState.CONSTANT and other.state == ConstLatState.TOP:
+        if a.state == ConstLatState.CONSTANT and b.state == ConstLatState.TOP:
             return True
 
         return False

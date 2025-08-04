@@ -266,6 +266,7 @@ def mir_eval(op: Op, operand1: Operand, operand2: Operand) -> Operand:
 # ++++++++++++++++++++++++ MIR ++++++++++++++++++++
 
 type MIRInstId = int
+type MIRInstAddr = int
 
 mir_inst_id = 0
 def new_id() -> MIRInstId:
@@ -297,9 +298,9 @@ class MIRInst:
 
     """
     def __init__(self, **kwargs):
-        self.id: MIRInstId = new_id()
-
-        self.addr = kwargs['addr']
+        self.global_id: MIRInstId = new_id()
+        self.id: MIRInstId = 0
+        self.addr: MIRInstAddr = kwargs['addr']
         self.op = kwargs['op']
         self.operand1: Operand = kwargs['operand1']
         self.operand2: Operand = kwargs['operand2']

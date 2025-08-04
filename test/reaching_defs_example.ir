@@ -1,0 +1,13 @@
+	%entry
+	i := m - 1
+	j := n
+	a := u1
+L1:
+	i := i + 1
+	j := j - 1
+	%if cond1 %goto &L2
+	a := u2
+L2:
+	i := u3
+	%if cond2 %goto &L1
+	%exit

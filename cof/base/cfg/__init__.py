@@ -4,7 +4,7 @@ from collections import deque, defaultdict
 from typing import Tuple, Optional, Dict, List, Union
 
 from cof.base.bb import BasicBlock, BasicBlockId, BasicBlockBranchType, BranchType
-from cof.base.mir import MIRInstId, MIRInst, Args, OperandType, Operand, Op, MIRInsts, Variable
+from cof.base.mir import MIRInstId, MIRInst, Args, OperandType, Operand, Op, MIRInsts, Variable, MIRInstAddr
 from cof.base.ssa import SSAEdgeBuilder, SSAEdge, SSAVariable, create_phi_function, has_phi_for_var
 
 
@@ -19,15 +19,19 @@ class ControlFlowGraphABC(ABC):
         pass
 
     @abstractmethod
-    def predecessors(self, block_id: BasicBlockId) -> List[BasicBlockId]:
+    def predecessors(self, block_id: BasicBlockId) -> List[BasicBlock]:
         pass
 
     @abstractmethod
-    def successors(self, block_id: BasicBlockId) -> List[BasicBlockId]:
+    def successors(self, block_id: BasicBlockId) -> List[BasicBlock]:
         pass
 
     @abstractmethod
     def block(self, block_id: BasicBlockId) -> BasicBlock:
+        pass
+
+    @abstractmethod
+    def inst(self, inst_addr: MIRInstAddr) -> MIRInst:
         pass
 
     @abstractmethod
@@ -37,14 +41,21 @@ class ControlFlowGraphABC(ABC):
     def reverse(self) -> 'ControlFlowGraphABC':
         return ReversedCFG(self)
 
-class ControlFlowGraph(ControlFlowGraphABC):
+class ControlFlowGraphForDataFlowAnalysis(ControlFlowGraphABC, ABC):
+    @abstractmethod
+    def collect_definitions(self) -> Dict[Tuple[str, MIRInstAddr], BasicBlock]:
+        pass
+
+
+class ControlFlowGraph(ControlFlowGraphForDataFlowAnalysis):
     def __init__(self, insts: MIRInsts):
         # Instruction List
         self.insts: MIRInsts = insts
 
-        self.insts_dict_by_id: Optional[Dict[MIRInstId, MIRInst]] = None
-
-        self.inst_id_to_block: Dict[BasicBlockId, BasicBlock] = {}
+        self.insts_dict_by_id: Dict[MIRInstId, MIRInst] = { }
+        self.insts_dict_by_addr: Dict[MIRInstAddr, MIRInst] = { }
+        self.block_by_inst_id: Dict[MIRInstId, BasicBlock] = { }
+        self.block_by_inst_addr: Dict[MIRInstAddr, BasicBlock] = { }
 
         # The root of the cfg
         self.root: Optional[BasicBlock, None] = None
@@ -80,6 +91,7 @@ class ControlFlowGraph(ControlFlowGraphABC):
 
         self._construct_cfg()
         self._assign_ranks()
+        self._reassign_inst_id()
 
     # ++++++++ Initialization ++++++++
     def _construct_cfg(self):
@@ -89,6 +101,9 @@ class ControlFlowGraph(ControlFlowGraphABC):
         # leaders_set_by_addr.add(0)
 
         for inst in self.insts.ret_insts():
+
+            self.insts_dict_by_addr[inst.addr] = inst
+
             match inst.op:
                 case Op.ENTRY:
                     leaders_set_by_addr.add(inst.addr)
@@ -297,14 +312,19 @@ class ControlFlowGraph(ControlFlowGraphABC):
     def exit_block(self) -> BasicBlock:
         return self.exit
 
-    def predecessors(self, block_id: BasicBlockId) -> List[BasicBlockId]:
-        return self.pred[block_id]
+    def predecessors(self, block_id: BasicBlockId) -> List[BasicBlock]:
+        pred_bb_list: List[BasicBlock] = [self.block(p) for p in self.pred[block_id]]
+        return pred_bb_list
 
-    def successors(self, block_id: BasicBlockId) -> List[BasicBlockId]:
-        return self.succ[block_id]
+    def successors(self, block_id: BasicBlockId) -> List[BasicBlock]:
+        succ_bb_list: List[BasicBlock] = [self.block(p) for p in self.succ[block_id]]
+        return succ_bb_list
 
     def block(self, block_id: BasicBlockId) -> BasicBlock:
         return self.block_by_id[block_id]
+
+    def inst(self, inst_addr: MIRInstAddr) -> MIRInst:
+        return self.insts_dict_by_addr[inst_addr]
 
     def all_blocks(self) -> List[BasicBlock]:
         return list(self.block_by_id.values())
@@ -313,7 +333,7 @@ class ControlFlowGraph(ControlFlowGraphABC):
         pass
 
 
-    # ++++++++ Compute ++++++++
+    # ++++++++ Dominator ++++++++
     def dom_comp(self):
         """
         A simple approach to computing all the dominators of each node in a flowgraph.
@@ -419,8 +439,17 @@ class ControlFlowGraph(ControlFlowGraphABC):
                 stack.append((child, False))
 
 
+    # ++++++++ Data-Flow Analysis ++++++++
+    def collect_definitions(self) -> Dict[Tuple[str, MIRInstAddr], BasicBlock]:
+        def_dict = { }
+        for inst in self.insts.ret_ordinary_insts():
+            if inst.is_assignment():
+                def_dict[(str(inst.get_dest_var()), inst.addr)] = self.block_by_inst_addr[inst.addr]
+
+        return def_dict
+
     # ++++++++ SSA ++++++++
-    def dom_front(self):
+    def _dom_front(self):
         """
         Dominance Frontier
         :return:
@@ -440,7 +469,7 @@ class ControlFlowGraph(ControlFlowGraphABC):
                         df[i] |= {y}
         self.df = df
 
-    def df_plus(self, sn):
+    def _df_plus(self, sn):
         """
         iterated dominance frontier DF+()
         :param sn:
@@ -463,62 +492,7 @@ class ControlFlowGraph(ControlFlowGraphABC):
                 self.dfp = d
                 change = True
 
-    def minimal_ssa(self):
-        variables: set[str] = set()
-
-        # collect all variables.
-        for inst in self.insts.ir_insts:
-            if inst.is_assignment():
-                variables.add(str(inst.get_dest_var().value))
-
-        # record all blocks which defines variable
-        def_sites: Dict[str, List] = {v: [] for v in variables}
-        for block in self.block_by_id.values():
-            for inst in block.insts.ret_insts():
-                if inst.is_assignment():
-                    variable: Variable = inst.get_dest_var().value
-                    def_sites[str(variable)].append(block.id)
-
-        # insert phi function for each variable
-        for varname in variables:
-            # initialize worklist and even_on_worklist
-
-            # the sequence stores blocks that need be handled
-            worklist = deque(def_sites[varname])
-            even_on_worklist = set(def_sites[varname])
-
-            # if the variable only be defined once, then we're done.
-            if len(even_on_worklist) == 1:
-                continue
-
-            # handle worklist iteratively
-            while worklist:
-                # extract current define block id
-                def_block_id = worklist.popleft()
-
-                # iterate the dominance frontier of def_block_id
-                for y in self.df[def_block_id]:
-                    y_block = self.block_by_id[y]
-                    # check if y has phi function of v
-                    if not has_phi_for_var(y_block, varname):
-
-                        # insert phi function as the first inst in y
-                        new_phi = create_phi_function(varname, num_pred_s=len(self.pred[y]))
-                        insert_index = self.insts.index_for_inst(y_block.first_ordinary_inst)
-                        # add phi inst into cfg insts
-                        self.add_new_inst(insert_index, new_phi)
-                        # add phi inst into block insts
-                        y_block.insts.add_phi_inst(new_phi)
-
-                        # check if y is inserted for the first time, join into worklist.
-                        if y not in even_on_worklist:
-                            even_on_worklist.add(y)
-                            worklist.append(y)
-
-        self.rename_variables(def_sites, variables)
-        self.reassign_inst_id()
-
-    def rename_variables(self, def_sites: Dict[str, List], variables: set[str]) -> None:
+    def _rename_variables(self, def_sites: Dict[str, List], variables: set[str]) -> None:
 
         # initialize version counters
         counters: Dict[str, int] = {v: 0 for v in def_sites.keys()}
@@ -679,6 +653,66 @@ class ControlFlowGraph(ControlFlowGraphABC):
                     phi_arg_var: SSAVariable = phi_args.args[index].value
                     phi_arg_var.version = version
 
+    def minimal_ssa(self):
+        self._dom_front()
+        self._df_plus(self.block_id_set)
+
+        variables: set[str] = set()
+
+        # collect all variables.
+        for inst in self.insts.ir_insts:
+            if inst.is_assignment():
+                variables.add(str(inst.get_dest_var().value))
+
+        # record all blocks which defines variable
+        def_sites: Dict[str, List] = {v: [] for v in variables}
+        for block in self.block_by_id.values():
+            for inst in block.insts.ret_insts():
+                if inst.is_assignment():
+                    variable: Variable = inst.get_dest_var().value
+                    def_sites[str(variable)].append(block.id)
+
+        # insert phi function for each variable
+        for varname in variables:
+            # initialize worklist and even_on_worklist
+
+            # the sequence stores blocks that need be handled
+            worklist = deque(def_sites[varname])
+            even_on_worklist = set(def_sites[varname])
+
+            # if the variable only be defined once, then we're done.
+            if len(even_on_worklist) == 1:
+                continue
+
+            # handle worklist iteratively
+            while worklist:
+                # extract current define block id
+                def_block_id = worklist.popleft()
+
+                # iterate the dominance frontier of def_block_id
+                for y in self.df[def_block_id]:
+                    y_block = self.block_by_id[y]
+                    # check if y has phi function of v
+                    if not has_phi_for_var(y_block, varname):
+
+                        # insert phi function as the first inst in y
+                        new_phi = create_phi_function(varname, num_pred_s=len(self.pred[y]))
+                        insert_index = self.insts.index_for_inst(y_block.first_ordinary_inst)
+                        # add phi inst into cfg insts
+                        self.add_new_inst(insert_index, new_phi)
+                        # add phi inst into block insts
+                        y_block.insts.add_phi_inst(new_phi)
+
+                        # check if y is inserted for the first time, join into worklist.
+                        if y not in even_on_worklist:
+                            even_on_worklist.add(y)
+                            worklist.append(y)
+
+        self._rename_variables(def_sites, variables)
+
+        # After we have inserted phi function, we need to reassign inst id.
+        self._reassign_inst_id()
+
     def ssa_edges_comp(self, loop_info) -> 'SSAEdgeBuilder':
         """
         Note:
@@ -773,7 +807,7 @@ class ControlFlowGraph(ControlFlowGraphABC):
 
 
     # ++++++++ Management ++++++++
-    def reassign_inst_id(self):
+    def _reassign_inst_id(self):
         for i, inst in enumerate(self.insts.ret_insts()):
             inst.id = i
 
@@ -781,7 +815,11 @@ class ControlFlowGraph(ControlFlowGraphABC):
 
         for block in self.block_by_id.values():
             for inst in block.insts.ret_insts():
-                self.inst_id_to_block[inst.id] = block
+                self.block_by_inst_id[inst.id] = block
+                if not inst.is_phi():
+                    self.block_by_inst_addr[inst.addr] = block
+
+
 
     def new_a_block(self, bb_id: BasicBlockId, block_insts: List[MIRInst]) -> BasicBlock:
         src_vertex = BasicBlock(bb_id, block_insts)
@@ -794,12 +832,19 @@ class ControlFlowGraph(ControlFlowGraphABC):
 
     def find_defining_block(self, inst: Union[MIRInstId, MIRInst]) -> Optional[BasicBlock]:
         if isinstance(inst, int):
-            return self.inst_id_to_block[inst]
+            return self.block_by_inst_id[inst]
         elif isinstance(inst, MIRInst):
-            return self.inst_id_to_block[inst.id]
+            return self.block_by_inst_id[inst.id]
         return None
 
     def add_new_inst(self, index: int, inst: MIRInst):
+        """
+        Add new inst to insts.
+        TODO:
+            handle self.insts_dict_by_id, self.insts_dict_by_addr.
+            add the inst to the corresponding basic block.
+
+        """
         self.insts.insert_insts(index, inst)
 
     def print_dom_tree(self, block: BasicBlock):
@@ -813,8 +858,8 @@ class ControlFlowGraph(ControlFlowGraphABC):
         self.construct_dominator_tree()
         self.post_order_comp()
 
-        self.dom_front()
-        self.df_plus(self.block_id_set)
+        self._dom_front()
+        self._df_plus(self.block_id_set)
 
 
 class ReversedCFG(ControlFlowGraphABC):
@@ -838,6 +883,9 @@ class ReversedCFG(ControlFlowGraphABC):
 
     def block(self, block_id: BasicBlockId) -> BasicBlock:
         return self.original.block(block_id)
+
+    def inst(self, inst_addr: MIRInstAddr) -> MIRInst:
+        return self.inst(inst_addr)
 
 class FlattenBasicBlocks:
     def __init__(self, cfg: ControlFlowGraph):
