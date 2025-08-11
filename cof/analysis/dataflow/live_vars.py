@@ -4,7 +4,7 @@ from typing import List, Dict
 from cof.analysis.dataflow.framework import TransferFunction
 from cof.base.bb import BasicBlock
 from cof.base.mir import Variable
-from cof.base.semilattice import Semilattice
+from cof.base.semilattice import Semilattice, T
 
 
 class LiveVarsLattice(Semilattice[set[Variable]]):
@@ -17,13 +17,10 @@ class LiveVarsLattice(Semilattice[set[Variable]]):
     def bottom(self) -> set[Variable]:
         return self.all_vars
 
-    def meet(self, other: List[set[Variable]]) -> set[Variable]:
-        copied_result = deepcopy(other[0])
-        for e in other[1:]:
-            copied_result |= e
-        return copied_result
+    def meet(self, a: T, b: T) -> T:
+        return a | b
 
-    def is_less_or_equal(self, a: set[Variable], b: set[Variable]) -> bool:
+    def partial_order(self, a: set[Variable], b: set[Variable]) -> bool:
         return b.issubset(a)
 
 class LiveVarsTransfer(TransferFunction):
@@ -35,5 +32,5 @@ class LiveVarsTransfer(TransferFunction):
         return self.use_dict.get(block, set()) | (input_val - self.def_dict.get(block, set()))
 
 
-def live_vars_on_state_change(block: BasicBlock, before: set[Variable], after: set[Variable]):
+def live_vars_on_state_change(block: BasicBlock, lattice, before: set[Variable], after: set[Variable]):
     print(f"Block {block.id}: {{ {", ".join(map(str, before))} }}  --->  {{ {", ".join(map(str, after))} }}")

@@ -43,7 +43,7 @@ class ControlFlowGraphABC(ABC):
 
 class ControlFlowGraphForDataFlowAnalysis(ControlFlowGraphABC, ABC):
     @abstractmethod
-    def collect_definitions(self) -> Dict[Tuple[Variable, MIRInstAddr], BasicBlock]:
+    def collect_definitions(self) -> Dict[BasicBlock, List[Tuple[Variable, MIRInstAddr]]]:
         pass
 
     @abstractmethod
@@ -441,8 +441,8 @@ class ControlFlowGraph(ControlFlowGraphForDataFlowAnalysis):
 
 
     # ++++++++ Data-Flow Analysis ++++++++
-    def collect_definitions(self) -> Dict[Tuple[Variable, MIRInstAddr], BasicBlock]:
-        def_dict = { }
+    def collect_definitions(self) -> Dict[BasicBlock, List[Tuple[Variable, MIRInstAddr]]]:
+        def_dict = defaultdict(list)
         for inst in self.insts.ret_ordinary_insts():
 
             block = self.block_by_inst_addr.get(inst.addr, None)
@@ -450,7 +450,7 @@ class ControlFlowGraph(ControlFlowGraphForDataFlowAnalysis):
                 continue
 
             if inst.is_assignment():
-                def_dict[(inst.get_dest_var().value, inst.addr)] = block
+                def_dict[block].append((inst.get_dest_var().value, inst.addr))
 
         return def_dict
 

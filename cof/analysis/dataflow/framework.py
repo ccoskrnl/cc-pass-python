@@ -36,7 +36,7 @@ class DataFlowAnalysisFramework(Generic[T, B]):
                  init_value: T = None,
                  safe_value: T = None,
                  merge_operation: Optional[Callable[[Iterable[T]], T]] = None,
-                 on_state_change: Optional[Callable[[B, T, T], None]] = None):
+                 on_state_change: Optional[Callable[[B, 'Semilattice[T]', T, T], None]] = None):
         """
         Initialize the data flow analysis framework.
 
@@ -68,6 +68,8 @@ class DataFlowAnalysisFramework(Generic[T, B]):
         # Initialize analysis states
         self.in_states: Dict[B, T] = { }
         self.out_states: Dict[B, T] = { }
+
+        self.result: Dict[B, T] = { }
 
         self._initialize_states(init_value, safe_value)
 
@@ -147,7 +149,9 @@ class DataFlowAnalysisFramework(Generic[T, B]):
                 # Collect neighbor output values
                 neighbor_values = [output_states[b] for b in neighbors]
                 # Compute new input value by merging neighbor outputs
-                new_input_value = self.lattice.meet(neighbor_values)
+                new_input_value = neighbor_values[0]
+                for neighbor in neighbor_values[1:]:
+                    new_input_value = self.lattice.meet(new_input_value, neighbor)
 
                 # Update input state if changed
                 if new_input_value != input_states[block]:
@@ -163,7 +167,7 @@ class DataFlowAnalysisFramework(Generic[T, B]):
             if new_output_value != output_states[block]:
                 # Notify state change callback if provided
                 if self.on_state_change:
-                    self.on_state_change(block, output_states[block], new_output_value)
+                    self.on_state_change(block, self.lattice, output_states[block], new_output_value)
 
                 # Update output state
                 output_states[block] = new_output_value
@@ -177,4 +181,5 @@ class DataFlowAnalysisFramework(Generic[T, B]):
         if iteration_count >= max_iterations:
             print(f"Warning: Analysis did not converge in {max_iterations} iterations")
 
-        return output_states if self.direction == 'forward' else input_states
+        self.result = output_states
+        return self.result

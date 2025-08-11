@@ -21,7 +21,7 @@ class LocalCodeOptimizer:
         self.cfg = ControlFlowGraph(self.insts)
         self.cfg.initialize()
 
-        print(self.cfg.edges)
+        # print(self.cfg.edges)
 
         # loop analyzer
         self.loop_analyzer = LoopAnalyzer(self.cfg)
@@ -29,9 +29,9 @@ class LocalCodeOptimizer:
 
     def optimize(self):
         analyzer = DataFlowAnalyzer(cfg=self.cfg)
-        print("Preforming Reaching Definitions Analysis...")
+        print("=====================  Preforming Reaching Definitions Analysis  ===================== \n")
         analyzer.reaching_definitions()
-        print("Preforming Live Variables Analysis...")
+        print("=====================  Preforming Live Variables Analysis  ===================== \n")
         analyzer.live_vars()
 
         # # SSA computing

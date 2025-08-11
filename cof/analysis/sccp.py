@@ -163,10 +163,10 @@ class SCCPAnalyzer:
         var_list = inst.get_operand_list()
         new_value = ConstLattice()
         for var in var_list:
-            new_value &= (self.lat_cell[str(var.value)])
+            new_value ^= (self.lat_cell[str(var.value)])
 
         if new_value != self.lat_cell[str(inst.result.value)]:
-            self.lat_cell[str(inst.result.value)] &= new_value
+            self.lat_cell[str(inst.result.value)] ^= new_value
 
             for succ_id in self.flow_succ(inst.id):
                 self.flow_wl.append((inst.id, succ_id))
@@ -193,7 +193,7 @@ class SCCPAnalyzer:
         # that use the variable) are added to ssa_wl to recalculate the values of
         # these instructions.
         if val != self.lat_cell[target]:
-            self.lat_cell[target] &= val
+            self.lat_cell[target] ^= val
 
             for succ_id in self.ssa_succ(inst.id):
                 self.ssa_wl.append((inst.id, succ_id))
