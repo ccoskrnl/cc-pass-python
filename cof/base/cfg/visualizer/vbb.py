@@ -1,4 +1,5 @@
 import math
+from random import randint
 
 from PyQt6.QtCore import Qt, QPointF, QRectF, QEvent
 from PyQt6.QtGui import QBrush, QPen, QColor, QTextCursor, QAction, QLinearGradient, QPainterPath, QGradient
@@ -193,14 +194,20 @@ class EdgeItem(QGraphicsPathItem):
             )
         elif self.connection_type == EdgeType.cross:
 
-            # 计算偏移量（避免重叠）
-            offset = (end_pos_x - (start_pos_x + self.source.width)) / 2
-
-
             path.lineTo(start_pos_x, start_pos_y + 40)
-            path.lineTo(end_pos_x - offset - (self.target.width / 2), start_pos_y + 40)
-            path.lineTo(end_pos_x - offset - (self.target.width / 2), end_pos_y - 20)
-            path.lineTo(end_pos_x, end_pos_y - 20)
+
+            if self.source.id == self.target.id:
+                path.lineTo(self.source.x - 20, start_pos_y + 40)
+                path.lineTo(self.source.x - 20, self.source.y - 20)
+                path.lineTo(start_pos_x, self.source.y - 20)
+            else:
+
+                # 计算偏移量（避免重叠）
+                offset = (end_pos_x - (start_pos_x + self.source.width)) / 2
+
+                path.lineTo(end_pos_x - offset - (self.target.width / 2), start_pos_y + 40)
+                path.lineTo(end_pos_x - offset - (self.target.width / 2), end_pos_y - 20)
+                path.lineTo(end_pos_x, end_pos_y - 20)
 
             path.lineTo(end_pos_x, end_pos_y)
 

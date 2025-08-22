@@ -83,8 +83,8 @@ class DataFlowAnalyzer:
             lattice=lattice,
             transfer=transfer,
             direction='backward',
-            init_value=set(),
-            safe_value=set(),
+            init_value=lattice.top(),
+            safe_value=lattice.bottom(),
             on_state_change=live_vars_on_state_change
         )
 

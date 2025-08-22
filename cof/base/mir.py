@@ -328,8 +328,8 @@ class MIRInst:
             Op.INIT: self._format_init
         }.get(self.op, self._format_operator)
 
-        return f"[ID:{self.id}]    {formatter()}"
-        # return formatter()
+        # return f"[ID:{self.id}]    {formatter()}"
+        return formatter()
 
     def _format_init(self):
         return f"%init {_val(self.result)}"

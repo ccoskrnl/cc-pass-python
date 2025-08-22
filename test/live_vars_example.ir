@@ -1,0 +1,13 @@
+	%entry
+
+	a := 2
+	b := 3
+
+_loop_start:
+	c := a + b
+	cond := c <= 100
+	%if cond %goto &_loop_start
+	printf ( a c )
+
+_exit:
+	%exit
