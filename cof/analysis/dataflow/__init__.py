@@ -2,6 +2,8 @@ from typing import Dict, List, Tuple
 
 from tabulate import tabulate
 
+from cof.analysis.dataflow.anticipated_exprs import AnticipatedSemilattice, AnticipatedTransfer, \
+    anticipated_exprs_on_state_change
 from cof.analysis.dataflow.framework import DataFlowAnalysisFramework
 from cof.analysis.dataflow.live_vars import LiveVarsLattice, LiveVarsTransfer, live_vars_on_state_change
 from cof.analysis.dataflow.reaching_defs import DefPoint, ReachingDefsProductSemilattice, ReachingDefsTransfer, \
@@ -29,27 +31,8 @@ class DataFlowAnalyzer:
             init_value=lattice.top(),
             safe_value=lattice.top(),
             on_state_change=reaching_defs_on_state_change
-            # init_value=set(),
-            # safe_value=set(),       # lattice.bottom()
-            # on_state_change=reaching_defs_on_state_change
         )
 
-        # all_defs: set[Definition] = set()
-        # for d in defs_dict_by_block.values():
-        #     all_defs.update(d)
-        #
-        # lattice = ReachingDefsSingleSemilattice(all_defs)
-        # transfer = ReachingDefsSingleSemilatticeFormTransfer(defs_dict_by_block)
-        # analysis = DataFlowAnalysisFramework(
-        #     cfg=self.cfg,
-        #     lattice=lattice,
-        #     transfer=transfer,
-        #     direction='forward',
-        #     init_value=set(),
-        #     safe_value=set(),       # lattice.bottom()
-        #     on_state_change=reaching_defs_on_state_change
-        # )
-        #
         analysis.analyze(strategy='worklist')
         print("\n\n++++++++++++++++++++++++++++++ Analysis Result ++++++++++++++++++++++++++++++")
         headers = [""]
@@ -91,6 +74,27 @@ class DataFlowAnalyzer:
         analysis.analyze(strategy='worklist')
         print("\n\n++++++++++++++++++++++++++++++ Analysis Result ++++++++++++++++++++++++++++++")
 
+        info = ""
+        for b, t in analysis.result.items():
+            info += f"Block {b.id}: {{ {", ".join(map(str, t))} }}\n"
+
+        print(info)
+
+
+    def anticipated_exprs(self):
+        lattice = AnticipatedSemilattice(self.cfg.collect_exprs())
+        transfer = AnticipatedTransfer(lattice, self.cfg.all_blocks())
+        analysis = DataFlowAnalysisFramework(
+            cfg=self.cfg,
+            lattice=lattice,
+            transfer=transfer,
+            direction='backward',
+            init_value=lattice.top(),
+            safe_value=lattice.bottom(),
+            on_state_change=anticipated_exprs_on_state_change,
+        )
+        analysis.analyze(strategy='worklist')
+        print("\n\n++++++++++++++++++++++++++++++ Analysis Result ++++++++++++++++++++++++++++++")
         info = ""
         for b, t in analysis.result.items():
             info += f"Block {b.id}: {{ {", ".join(map(str, t))} }}\n"

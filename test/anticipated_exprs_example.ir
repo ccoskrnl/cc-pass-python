@@ -1,0 +1,10 @@
+    %entry
+
+    x := a + b
+    y := a * b
+    %goto &L1
+L1:
+    a := 5
+    z := a + b
+
+    %exit

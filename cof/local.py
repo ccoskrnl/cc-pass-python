@@ -29,10 +29,12 @@ class LocalCodeOptimizer:
 
     def optimize(self):
         analyzer = DataFlowAnalyzer(cfg=self.cfg)
-        print("=====================  Preforming Reaching Definitions Analysis  ===================== \n")
-        analyzer.reaching_definitions()
-        print("=====================  Preforming Live Variables Analysis  ===================== \n")
-        analyzer.live_vars()
+        # print("=====================  Preforming Reaching Definitions Analysis  ===================== \n")
+        # analyzer.reaching_definitions()
+        # print("=====================  Preforming Live Variables Analysis  ===================== \n")
+        # analyzer.live_vars()
+        print("=====================  Preforming Anticipated Expressions Analysis  ===================== \n")
+        analyzer.anticipated_exprs()
 
         # # SSA computing
         # self.cfg.minimal_ssa()

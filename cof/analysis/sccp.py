@@ -139,7 +139,7 @@ class SCCPAnalyzer:
         if not inst.is_evaluatable():
             return top_const_lat
 
-        operand_list: List[Operand] = inst.get_operand_list_of_evaluation()
+        operand_list: List[Operand] = inst.ret_a_operand_list_for_evaluatable_exp_inst()
         op_cl_list: List[ConstLattice] = [ ]
         for o in operand_list:
             if isinstance(o.value, SSAVariable):
@@ -160,7 +160,7 @@ class SCCPAnalyzer:
 
     def visit_phi(self, inst: MIRInst):
         """ process phi node """
-        var_list = inst.get_operand_list()
+        var_list = inst.ret_operand_list()
         new_value = ConstLattice()
         for var in var_list:
             new_value ^= (self.lat_cell[str(var.value)])

@@ -190,6 +190,9 @@ class Operand:
         return True if self.type == other.type \
                        and self.value == other.value else False
 
+    def __hash__(self):
+        return hash((self.type, self.value))
+
     # ++++++++ repr ++++++++
     def __repr__(self):
         formatter = {
@@ -224,16 +227,16 @@ class Operand:
 
 def mir_eval(op: Op, operand1: Operand, operand2: Operand) -> Operand:
 
-    def normalize_operands(op1: Operand, op2: Operand) -> tuple:
-        if op1.type == op2.type:
-            return op1.value, op2.value, op1.type
+    def normalize_operands(opnd1: Operand, opnd2: Operand) -> tuple:
+        if opnd1.type == opnd2.type:
+            return opnd1.value, opnd2.value, opnd1.type
         numeric_types = { OperandType.INT, OperandType.FLOAT }
-        if op1.type in numeric_types and op2.type in numeric_types:
+        if opnd1.type in numeric_types and opnd2.type in numeric_types:
             # widening to float
-            return float(op1.value), float(op2.value), OperandType.FLOAT
+            return float(opnd1.value), float(opnd2.value), OperandType.FLOAT
 
         raise TypeError("Incompatible operand types: "
-                        f"{Operand_Type_Str_Map[op1.type]} and {Operand_Type_Str_Map[op2.type]}")
+                        f"{Operand_Type_Str_Map[opnd1.type]} and {Operand_Type_Str_Map[opnd2.type]}")
 
     def safe_divide(a: float, b: float) -> float:
         if b == 0:
@@ -371,6 +374,8 @@ class MIRInst:
 
     def is_evaluatable(self) -> bool:
         return True if self.op in Evaluatable_Op else False
+    def is_arithmetic(self) -> bool:
+        return True if self.op in Arithmetic_Op else False
     def is_assignment(self) -> bool:
         return True if self.op in Assignment_Op else False
     def is_exp(self) -> bool:
@@ -386,7 +391,13 @@ class MIRInst:
     def is_init(self) -> bool:
         return True if self.op == Op.INIT else False
 
-    def get_dest_var(self):
+    def ret_dest_variable(self) -> Optional[Operand]:
+        """
+        Retrieve the destination variable of the instruction.
+        1. Return the assigned variable if it is an assignment instruction.
+        2. Return the condition operand if it is a condition branch instruction.
+        3. Return None if it is not one of the two type instructions above.
+        """
         # assert self.result.type == OperandType.VAR
         if self.op in Assignment_Op:
             assert self.result
@@ -397,31 +408,47 @@ class MIRInst:
             return self.operand1
         return None
 
-    def get_operand_list_of_evaluation(self) -> List[Operand]:
-        l: List[Operand] = []
+    def ret_assigned_var(self) -> Optional[Variable]:
+        """
+        Retrieve the assigned variable of the assignment instruction.
+        """
+        if self.is_assignment():
+            assert self.result
+            return self.result.value
+        return None
+
+    def ret_a_operand_list_for_evaluatable_exp_inst(self) -> List[Operand]:
+        """
+        Return an operand list for an evaluatable expression instruction.
+        1. Add operands into the list if the instruction is a binary expression.
+        2. Add condition operand into the list if the instruction is a condition branch.
+        """
         if self.is_exp():
-            l.append(self.operand1)
-            if self.operand2:
-                l.append(self.operand2)
-
+            return [self.operand1, self.operand2] if self.operand2 else [self.operand1]
         elif self.is_if():
-            l.append(self.operand1)
+            return [self.operand1]
+        return []
 
-        return l
-
-    def get_call_arg_list(self) -> List[Operand]:
+    def ret_call_args_list(self) -> List[Operand]:
+        """
+        Return an arguments list for call instruction.
+        You need to identify the instruction is call instruction before you call this method.
+        """
         assert self.op == Op.CALL or self.op == Op.PHI or self.op == Op.CALL_ASSIGN
         assert self.operand2.type == OperandType.ARGS
         return self.operand2.value.args
 
-    def get_operand_list(self) -> List[Operand]:
+    def ret_operand_list(self) -> List[Operand]:
+        """
+        Return an operand list for evaluatable instructions (include call instruction, but exclude goto )
+        """
         l: List[Operand] = []
 
         if self.is_phi():
-            l = self.get_call_arg_list()
+            l = self.ret_call_args_list()
 
         elif self.is_call():
-            l = self.get_call_arg_list()
+            l = self.ret_call_args_list()
 
         elif self.is_exp():
             l.append(self.operand1)
@@ -433,19 +460,23 @@ class MIRInst:
 
         return l
 
-    def is_arithmetic(self):
-        return self.op in Arithmetic_Op
     def all_constant_operands(self):
-        for operand in self.get_operand_list_of_evaluation():
+        """
+        check if all operands is constant, otherwise return false.
+        """
+        for operand in self.ret_a_operand_list_for_evaluatable_exp_inst():
             if operand.type not in Const_Operand_Type:
                 return False
         return True
 
-    def if_to_goto(self):
+
+    def convert_if_to_goto(self):
         assert self.is_if()
         self.op = Op.GOTO
         self.operand1 = None
         self.operand2 = None
+
+
 
 class MIRInsts:
     def __init__(self, insts:Optional[List[MIRInst]]):

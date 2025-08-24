@@ -4,6 +4,7 @@ from collections import deque, defaultdict
 from typing import Tuple, Optional, Dict, List, Union
 
 from cof.base.bb import BasicBlock, BasicBlockId, BasicBlockBranchType, BranchType
+from cof.base.expr import Expression, ret_expr_from_mir_inst
 from cof.base.mir import MIRInstId, MIRInst, Args, OperandType, Operand, Op, MIRInsts, Variable, MIRInstAddr
 from cof.base.ssa import SSAEdgeBuilder, SSAEdge, SSAVariable, create_phi_function, has_phi_for_var
 
@@ -48,6 +49,10 @@ class ControlFlowGraphForDataFlowAnalysis(ControlFlowGraphABC, ABC):
 
     @abstractmethod
     def collect_use_def(self) -> Tuple[Dict[BasicBlock, set[Variable]], Dict[BasicBlock, set[Variable]]]:
+        pass
+
+    @abstractmethod
+    def collect_exprs(self) -> set[Expression]:
         pass
 
 class ControlFlowGraph(ControlFlowGraphForDataFlowAnalysis):
@@ -450,7 +455,7 @@ class ControlFlowGraph(ControlFlowGraphForDataFlowAnalysis):
                 continue
 
             if inst.is_assignment():
-                def_dict[block].append((inst.get_dest_var().value, inst.addr))
+                def_dict[block].append((inst.ret_dest_variable().value, inst.addr))
 
         return def_dict
 
@@ -468,7 +473,7 @@ class ControlFlowGraph(ControlFlowGraphForDataFlowAnalysis):
         for block in self.all_blocks():
             for inst in block.insts.ret_ordinary_insts():
                 if inst.is_assignment():
-                    var = inst.get_dest_var().value
+                    var = inst.ret_dest_variable().value
                     def_dict[block].add(var)
                     block_defs[block].add(var)
 
@@ -476,14 +481,14 @@ class ControlFlowGraph(ControlFlowGraphForDataFlowAnalysis):
             local_defs = set()
             for inst in block.insts.ret_ordinary_insts():
 
-                for operand in inst.get_operand_list():
+                for operand in inst.ret_operand_list():
                     var = operand.value
                     if isinstance(var, Variable):
                         if var not in local_defs and var not in block_defs[block]:
                             use_dict[block].add(var)
 
                 if inst.is_assignment():
-                    var = inst.get_dest_var().value
+                    var = inst.ret_dest_variable().value
                     local_defs.add(var)
 
                 # TODO: Special handling: Function calls may implicitly
@@ -495,6 +500,34 @@ class ControlFlowGraph(ControlFlowGraphForDataFlowAnalysis):
                 #             use_dict[block].add(global_var)
 
         return use_dict, def_dict
+
+    def collect_exprs(self) -> set[Expression]:
+        all_exprs = set()
+
+        # def is_not_exist(e: Expression) -> bool:
+        #     nonlocal all_exprs
+        #     for expression in all_exprs:
+        #         if e.op == expression.op \
+        #             and e.operands[0] == expression.operands[0] \
+        #             and e.operands[1] == expression.operands[1]:
+        #             return False
+        #
+        #     return True
+
+
+        for inst in self.insts.ret_insts():
+            expr = ret_expr_from_mir_inst(inst)
+            # if expr is not None and is_not_exist(expr):
+            if expr is not None:
+                all_exprs.add(expr)
+
+        return all_exprs
+
+        # return {
+        #     ret_expr_from_mir_inst(inst)
+        #     for inst in self.insts.ret_insts()
+        #     if ret_expr_from_mir_inst(inst) is not None
+        # }
 
     # ++++++++ SSA ++++++++
     def _dom_front(self):
@@ -616,7 +649,7 @@ class ControlFlowGraph(ControlFlowGraphForDataFlowAnalysis):
 
                 # rename (def)
                 if inst_in_cbb.is_assignment():
-                    v: Variable = inst_in_cbb.get_dest_var().value
+                    v: Variable = inst_in_cbb.ret_dest_variable().value
                     counters[v.varname] += 1
                     new_ver = counters[v.varname]
                     new_var = SSAVariable(v, new_ver)
@@ -710,14 +743,14 @@ class ControlFlowGraph(ControlFlowGraphForDataFlowAnalysis):
         # collect all variables.
         for inst in self.insts.ir_insts:
             if inst.is_assignment():
-                variables.add(str(inst.get_dest_var().value))
+                variables.add(str(inst.ret_dest_variable().value))
 
         # record all blocks which defines variable
         def_sites: Dict[str, List] = {v: [] for v in variables}
         for block in self.block_by_id.values():
             for inst in block.insts.ret_insts():
                 if inst.is_assignment():
-                    variable: Variable = inst.get_dest_var().value
+                    variable: Variable = inst.ret_dest_variable().value
                     def_sites[str(variable)].append(block.id)
 
         # insert phi function for each variable
@@ -811,7 +844,7 @@ class ControlFlowGraph(ControlFlowGraphForDataFlowAnalysis):
         # connect common use.
         for block in self.block_by_id.values():
             for inst in block.insts.ret_ordinary_insts():
-                operand_list = inst.get_operand_list()
+                operand_list = inst.ret_operand_list()
                 for operand in operand_list:
                     if isinstance(operand.value, SSAVariable) and str(operand.value) in def_sites:
                         src_inst_id = def_sites[str(operand.value)]
@@ -830,7 +863,7 @@ class ControlFlowGraph(ControlFlowGraphForDataFlowAnalysis):
                 # get predecessor id list
                 predecessor_id_list = self.pred[block.id]
 
-                for i, operand in enumerate(phi.get_operand_list()):
+                for i, operand in enumerate(phi.ret_operand_list()):
                     assert isinstance(operand.value, SSAVariable)
                     ssa_name = str(operand.value)
                     if ssa_name in def_sites:

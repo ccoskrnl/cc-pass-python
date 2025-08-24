@@ -8,7 +8,7 @@ from cof.base.semilattice import Semilattice
 T = TypeVar("T")
 B = TypeVar("B")
 
-class TransferFunction(ABC, Generic[T, B]):
+class TransferFunction(ABC, Generic[B, T]):
     """Transfer Function"""
 
     @abstractmethod
@@ -17,7 +17,7 @@ class TransferFunction(ABC, Generic[T, B]):
         pass
 
 
-class DataFlowAnalysisFramework(Generic[T, B]):
+class DataFlowAnalysisFramework(Generic[B, T]):
     """Generic data flow analysis framework supporting forward and backward analyses.
 
     Attributes:
@@ -31,7 +31,7 @@ class DataFlowAnalysisFramework(Generic[T, B]):
     def __init__(self,
                  cfg: 'ControlFlowGraphForDataFlowAnalysis',
                  lattice: 'Semilattice[T]',
-                 transfer: 'TransferFunction[T, B]',
+                 transfer: 'TransferFunction[B, T]',
                  direction: str = 'forward', # 'forward' or 'backward'
                  init_value: T = None,
                  safe_value: T = None,
