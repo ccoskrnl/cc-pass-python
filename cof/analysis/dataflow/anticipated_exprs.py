@@ -1,9 +1,17 @@
-from typing import Dict, Set, List, Optional
+"""
+    Anticipated expressions analysis belongs to backward data-flow analysis problem.
 
-from cof.analysis.dataflow.framework import TransferFunction, B, T
+    Assuming there is a block B_1, we need to figure out IN[B_1]. This is because
+    when we compute the data-flow equation IN[B_1] = f_{B_1} ( OUT[B_1] ), we actually
+    obtain the expression used in B_1. We put these expressions in IN[B_1], so that we
+    can see these expressions(be referenced in B_1) at the entrance of B_1 and replace
+    these expressions with temporary value which was computed before entering B_1.
+"""
+
+from typing import Dict, Set, List, Optional
+from cof.analysis.dataflow.framework import TransferFunction
 from cof.base.bb import BasicBlock
 from cof.base.expr import Expression, ret_expr_from_mir_inst
-from cof.base.mir import Variable
 from cof.base.semilattice import Semilattice
 
 

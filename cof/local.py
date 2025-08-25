@@ -7,6 +7,7 @@ from cof.base.cfg import ControlFlowGraph
 from cof.analysis.sccp import sccp_analysis, SCCPAnalyzer
 from cof.early.const_folding import constant_folding
 from cof.base.mir import MIRInsts
+from cof.pre.lcm import lazy_code_motion
 
 
 class LocalCodeOptimizer:
@@ -28,24 +29,30 @@ class LocalCodeOptimizer:
         self.loop_analyzer.analyze_loops()
 
     def optimize(self):
-        analyzer = DataFlowAnalyzer(cfg=self.cfg)
+
+        # +++++++++++++++++++++ Data Flow Analysis Test +++++++++++++++++++++
+
+        # analyzer = DataFlowAnalyzer(cfg=self.cfg)
         # print("=====================  Preforming Reaching Definitions Analysis  ===================== \n")
         # analyzer.reaching_definitions()
         # print("=====================  Preforming Live Variables Analysis  ===================== \n")
         # analyzer.live_vars()
-        print("=====================  Preforming Anticipated Expressions Analysis  ===================== \n")
-        analyzer.anticipated_exprs()
+        # print("=====================  Preforming Anticipated Expressions Analysis  ===================== \n")
+        # analyzer.anticipated_exprs()
 
-        # # SSA computing
+
+        # +++++++++++++++++++++ Lazy-Code Motion Analysis +++++++++++++++++++++
+        lazy_code_motion(self.cfg)
+
+        # +++++++++++++++++++++ SSA Computing +++++++++++++++++++++
         # self.cfg.minimal_ssa()
         # self.ssa_edge_builder = self.cfg.ssa_edges_comp(self.loop_analyzer)
         # final_insts = MIRInsts(None)
-        #
-        #
+
+
+        # +++++++++++++++++++++ SCCP Analysis +++++++++++++++++++++
         # sccp_analyzer: SCCPAnalyzer = sccp_analysis(self.cfg, self.ssa_edge_builder)
         # constant_folding(sccp_analyzer)
-        # # dce_insts = control_flow_dce(sccp_analyzer)
-        # #
-        # # final_insts = dce_insts
-        # return final_insts
 
+
+        pass

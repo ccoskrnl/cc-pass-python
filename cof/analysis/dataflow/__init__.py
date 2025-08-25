@@ -10,6 +10,7 @@ from cof.analysis.dataflow.reaching_defs import DefPoint, ReachingDefsProductSem
     reaching_defs_on_state_change
 from cof.base.bb import BasicBlock
 from cof.base.cfg import ControlFlowGraphForDataFlowAnalysis
+from cof.base.expr import Expression
 from cof.base.mir import Variable
 
 
@@ -81,7 +82,7 @@ class DataFlowAnalyzer:
         print(info)
 
 
-    def anticipated_exprs(self):
+    def anticipated_exprs(self) -> Dict[BasicBlock, set[Expression]]:
         lattice = AnticipatedSemilattice(self.cfg.collect_exprs())
         transfer = AnticipatedTransfer(lattice, self.cfg.all_blocks())
         analysis = DataFlowAnalysisFramework(
@@ -89,8 +90,8 @@ class DataFlowAnalyzer:
             lattice=lattice,
             transfer=transfer,
             direction='backward',
-            init_value=lattice.top(),
-            safe_value=lattice.bottom(),
+            init_value=lattice.bottom(),
+            safe_value=lattice.top(),
             on_state_change=anticipated_exprs_on_state_change,
         )
         analysis.analyze(strategy='worklist')
@@ -100,3 +101,5 @@ class DataFlowAnalyzer:
             info += f"Block {b.id}: {{ {", ".join(map(str, t))} }}\n"
 
         print(info)
+
+        return analysis.result

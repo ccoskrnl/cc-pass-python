@@ -8,8 +8,5 @@ if __name__ == "__main__":
     local_optimizer = LocalCodeOptimizer(insts=insts)
     local_optimizer.initialize()
     final_insts = local_optimizer.optimize()
-    # final_insts.print()
-    # final_cfg = ControlFlowGraph(final_insts)
-    # visualize_cfg(final_cfg)
 
     visualize_cfg(local_optimizer.cfg)

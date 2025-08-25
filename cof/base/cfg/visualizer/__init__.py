@@ -25,7 +25,7 @@ class CFGVisualizer(QMainWindow):
         self.block_color = QColor(230, 230, 230)
 
         self.inst_font_color = QColor(0, 0, 0)
-        self.inst_font = QFont("Maple Mono NF", 13)
+        self.inst_font = QFont("Maple Mono NF", 9)
         self.inst_font_metrics = QFontMetrics(self.inst_font)
 
         self.title_font_color = QColor(255, 255, 255)
