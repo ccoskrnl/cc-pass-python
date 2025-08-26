@@ -4,7 +4,7 @@ from typing import Set, List, Dict, Tuple
 
 from tabulate import tabulate
 
-from cof.analysis.dataflow.framework import TransferFunction, B
+from cof.analysis.dataflow.framework import TransferCluster, B
 from cof.base.bb import BasicBlock
 from cof.base.mir import MIRInstAddr, Variable
 from cof.base.semilattice import Semilattice, T
@@ -173,7 +173,7 @@ class ReachingDefsProductSemilattice(Semilattice['Semilattice']):
         )
 
 
-class ReachingDefsTransfer(TransferFunction):
+class ReachingDefsTransfer(TransferCluster):
 
     def __init__(self,
                  lattice: ReachingDefsProductSemilattice,

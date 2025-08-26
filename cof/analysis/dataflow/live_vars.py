@@ -1,7 +1,7 @@
 from copy import deepcopy
 from typing import List, Dict
 
-from cof.analysis.dataflow.framework import TransferFunction
+from cof.analysis.dataflow.framework import TransferCluster
 from cof.base.bb import BasicBlock
 from cof.base.mir import Variable
 from cof.base.semilattice import Semilattice, T
@@ -23,7 +23,7 @@ class LiveVarsLattice(Semilattice[set[Variable]]):
     def partial_order(self, a: set[Variable], b: set[Variable]) -> bool:
         return b.issubset(a)
 
-class LiveVarsTransfer(TransferFunction):
+class LiveVarsTransfer(TransferCluster):
     def __init__(self, use_dict: Dict[BasicBlock, set[Variable]], def_dict: Dict[BasicBlock, set[Variable]]):
         self.use_dict: Dict[BasicBlock, set[Variable]] = use_dict
         self.def_dict: Dict[BasicBlock, set[Variable]] = def_dict

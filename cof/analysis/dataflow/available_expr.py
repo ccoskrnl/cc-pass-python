@@ -1,6 +1,6 @@
 from typing import Dict
 
-from cof.analysis.dataflow.framework import TransferFunction, B
+from cof.analysis.dataflow.framework import TransferCluster, B
 from cof.base.bb import BasicBlock
 from cof.base.expr import Expression
 from cof.base.semilattice import Semilattice, T

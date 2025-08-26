@@ -7,9 +7,8 @@
     can see these expressions(be referenced in B_1) at the entrance of B_1 and replace
     these expressions with temporary value which was computed before entering B_1.
 """
-
 from typing import Dict, Set, List, Optional
-from cof.analysis.dataflow.framework import TransferFunction
+from cof.analysis.dataflow.framework import TransferCluster
 from cof.base.bb import BasicBlock
 from cof.base.expr import Expression, ret_expr_from_mir_inst
 from cof.base.semilattice import Semilattice
@@ -35,31 +34,31 @@ class AnticipatedSemilattice(Semilattice[Set[Expression]]):
 
 
 
-class AnticipatedTransfer(TransferFunction[BasicBlock, Set[Expression]]):
+class AnticipatedTransfer(TransferCluster[BasicBlock, Set[Expression]]):
 
-    def __init__(self, lattice: AnticipatedSemilattice, blocks: List[BasicBlock]):
+    def __init__(self, all_exprs: set[Expression], blocks: List[BasicBlock]):
         self.blocks = blocks
-        self.lattice = lattice
+        self.all_exprs = all_exprs
 
-        self.gen_sets: Dict[BasicBlock, Set[Expression]] = self._comp_gen_sets()
-        self.kill_sets: Dict[BasicBlock, Set[Expression]] = self._comp_kill_sets()
+        self.e_use_sets: Dict[BasicBlock, Set[Expression]] = self._comp_gen_sets()
+        self.e_kill_sets: Dict[BasicBlock, Set[Expression]] = self._comp_kill_sets()
 
     def _comp_gen_sets(self) -> Dict[BasicBlock, Set[Expression]]:
-        gen_sets = {}
+        e_use_sets = {}
 
         for block in self.blocks:
-            gen = set()
+            e_use = set()
             for inst in block.insts.ret_insts():
-                exp: Optional[Expression] = ret_expr_from_mir_inst(inst)
-                if exp is not None:
-                    gen.add(exp)
+                expr: Optional[Expression] = ret_expr_from_mir_inst(inst)
+                if expr is not None:
+                    e_use.add(expr)
 
-            gen_sets[block] = gen
+            e_use_sets[block] = e_use
 
-        return gen_sets
+        return e_use_sets
 
     def _comp_kill_sets(self) -> Dict[BasicBlock, Set[Expression]]:
-        kill_sets = { }
+        e_kill_sets = { }
         for block in self.blocks:
             kill = set()
 
@@ -70,18 +69,18 @@ class AnticipatedTransfer(TransferFunction[BasicBlock, Set[Expression]]):
                 if assigned_var is not None:
                     modified_vars.add(assigned_var)
 
-                for expr in self.lattice.bottom():
+                for expr in self.all_exprs:
                     if any(var in modified_vars for var in expr.operands):
                         kill.add(expr)
 
-                kill_sets[block] = kill
+                e_kill_sets[block] = kill
 
-        return kill_sets
+        return e_kill_sets
 
 
 
     def apply(self, block: BasicBlock, input_val: set[Expression]) -> set[Expression]:
-        return self.gen_sets.get(block, set()) | (input_val - self.kill_sets.get(block, set()))
+        return self.e_use_sets.get(block, set()) | (input_val - self.e_kill_sets.get(block, set()))
 
 
 def anticipated_exprs_on_state_change(block: BasicBlock, lattice, before: set[Expression], after: set[Expression]):

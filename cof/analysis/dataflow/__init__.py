@@ -83,8 +83,9 @@ class DataFlowAnalyzer:
 
 
     def anticipated_exprs(self) -> Dict[BasicBlock, set[Expression]]:
-        lattice = AnticipatedSemilattice(self.cfg.collect_exprs())
-        transfer = AnticipatedTransfer(lattice, self.cfg.all_blocks())
+        all_exprs = self.cfg.collect_exprs()
+        lattice = AnticipatedSemilattice(all_exprs)
+        transfer = AnticipatedTransfer(all_exprs, self.cfg.all_blocks())
         analysis = DataFlowAnalysisFramework(
             cfg=self.cfg,
             lattice=lattice,
