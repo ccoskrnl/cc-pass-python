@@ -1,31 +1,56 @@
+from copy import deepcopy
 from typing import Dict, Optional, List, Callable
 
-from cof.analysis.dataflow import AnticipatedSemilattice, DataFlowAnalysisFramework
-from cof.analysis.dataflow.available_expr import AvailableExprSemilattice
+from cof.analysis.dataflow import DataFlowAnalysisFramework
 from cof.analysis.dataflow.framework import TransferCluster
 from cof.base.bb import BasicBlock, BasicBlockId
 from cof.base.cfg import ControlFlowGraph
-from cof.base.expr import Expression, ret_expr_from_mir_inst
-from cof.base.mir import MIRInsts
+from cof.base.expr import Expression, ret_expr_from_mir_inst, has_expr, convert_bin_expr_to_operand
+from cof.base.mir import MIRInst, Variable, Operand, OperandType
 from cof.base.semilattice import Semilattice
+
+
+class LCMAnticipatedExprSemilattice(Semilattice[set[Expression]]):
+
+    def __init__(self, all_exprs: set[Expression]):
+        self.universal_set: set[Expression] = all_exprs
+
+    def bottom(self) -> set[Expression]:
+        return set()
+
+    def meet(self, a: set[Expression], b: set[Expression]) -> set[Expression]:
+        return a & b
+
+    def top(self) -> set[Expression]:
+        return self.universal_set
+
+class LCMAvailableExprSemilattice(Semilattice[set[Expression]]):
+    def __init__(self, all_exprs: set[Expression]):
+        self.universal_set: set[Expression] = all_exprs
+
+    def bottom(self) -> set[Expression]:
+        return set()
+
+    def meet(self, a: set[Expression], b: set[Expression]) -> set[Expression]:
+        return a & b
+
+    def top(self) -> set[Expression]:
+        return self.universal_set
 
 
 class LCMPostponableExprSemilattice(Semilattice[set[Expression]]):
 
     def __init__(self, all_exprs: set[Expression]):
-        self.all_exprs: set[Expression] = all_exprs
+        self.universal_set: set[Expression] = all_exprs
 
     def top(self) -> set[Expression]:
-        return set()
+        return self.universal_set
 
     def bottom(self) -> set[Expression]:
-        return self.all_exprs
+        return set()
 
     def meet(self, a: set[Expression], b: set[Expression]) -> set[Expression]:
         return a & b
-
-    def partial_order(self, a: set[Expression], b: set[Expression]) -> bool:
-        return b.issubset(a)
 
 class LCMUsedExprSemilattice(Semilattice[set[Expression]]):
 
@@ -41,8 +66,6 @@ class LCMUsedExprSemilattice(Semilattice[set[Expression]]):
     def meet(self, a: set[Expression], b: set[Expression]) -> set[Expression]:
         return a & b
 
-    def partial_order(self, a: set[Expression], b: set[Expression]) -> bool:
-        return b.issubset(a)
 
 class LCMAnticipatedExprTransferCluster(TransferCluster[BasicBlock, set[Expression]]):
 
@@ -132,8 +155,8 @@ def _comp_e_kill_sets(
 
         if modified_vars:
             for expr in all_exprs:
-                if ((expr.operands[0].value in modified_vars)
-                        or (expr.operands[1].value in modified_vars)):
+                if ((expr.operand1.value in modified_vars)
+                        or (expr.operand2.value in modified_vars)):
                     kill.add(expr)
 
         e_kill_sets[block] = kill
@@ -162,6 +185,7 @@ def _comp_latest_sets(
             ep_list[i] = earliest_set[s] | postponable_in_set[s]
 
         # compute the intersection
+        r = set()
         if ep_list:
             r = ep_list[0]
             for ep in ep_list[1:]:
@@ -200,11 +224,15 @@ def _comp_earliest_sets(
 
 
 
-def lazy_code_motion(cfg: ControlFlowGraph) -> MIRInsts:
+def lazy_code_motion_optimize(cfg: ControlFlowGraph):
 
     blocks: List[BasicBlock] = cfg.all_blocks()
     all_exprs = cfg.collect_exprs()
 
+
+    # $e\_use_{B}$ is the set of expressions computed in $B$ and $e\_kill_{B}$ is
+    # the set of expressions killed, that is, the set of expressions any of whose
+    # operands are defined in $B$.
     e_use_sets: Dict[BasicBlock, set[Expression]] = _comp_e_use_sets(blocks)
     e_kill_sets: Dict[BasicBlock, set[Expression]] = _comp_e_kill_sets(blocks, all_exprs)
 
@@ -214,16 +242,16 @@ def lazy_code_motion(cfg: ControlFlowGraph) -> MIRInsts:
     Step 1:
     Find all the expressions anticipated at each program point using a backward data-flow pass.
     """
-    anticipated_exprs_lattice = AnticipatedSemilattice(all_exprs)
+    anticipated_exprs_lattice = LCMAnticipatedExprSemilattice(all_exprs)
     anticipated_exprs_transfer_cluster = LCMAnticipatedExprTransferCluster(e_use_sets, e_kill_sets)
     anticipated_exprs_analysis = DataFlowAnalysisFramework(
         cfg=cfg,
         lattice=anticipated_exprs_lattice,
         transfer=anticipated_exprs_transfer_cluster,
         direction='backward',
-        init_value=anticipated_exprs_lattice.top(),
-        safe_value=anticipated_exprs_lattice.bottom(),
-        on_state_change=expr_on_state_change,
+        init_value=anticipated_exprs_lattice.bottom(),
+        safe_value=anticipated_exprs_lattice.top(),
+        # on_state_change=expr_on_state_change,
     )
     anticipated_exprs_analysis.analyze(strategy='worklist')
 
@@ -237,7 +265,7 @@ def lazy_code_motion(cfg: ControlFlowGraph) -> MIRInsts:
     but are not available.**
     """
 
-    available_exprs_lattice = AvailableExprSemilattice(all_exprs)
+    available_exprs_lattice = LCMAvailableExprSemilattice(all_exprs)
     available_exprs_transfer_cluster = LCMAvailableExprTransferCluster(
         anticipated_exprs_analysis.in_states,
         anticipated_exprs_transfer_cluster.e_kill_sets,
@@ -247,17 +275,24 @@ def lazy_code_motion(cfg: ControlFlowGraph) -> MIRInsts:
         lattice=available_exprs_lattice,
         transfer=available_exprs_transfer_cluster,
         direction='forward',
-        init_value=available_exprs_lattice.top(),
-        safe_value=available_exprs_lattice.bottom(),
-        on_state_change=expr_on_state_change
+        init_value=available_exprs_lattice.bottom(),
+        safe_value=available_exprs_lattice.top(),
+        # on_state_change=expr_on_state_change
     )
     available_exprs_analysis.analyze(strategy='worklist')
 
     """
     Step 3:
+    The third step postpones the computation of expressions as much as possible while preserving the
+    original program semantics and minimizing redundancy.
+    
     Executing an expression as soon as it is anticipated may produce a value long before it is used.
     An expression is postponable at a program point if the expression has been anticipated and has
     yet to be used along any path reaching the program point. 
+    
+    Formally, an expression $x + y$ is postponable at a program point $p$ if an early placement of
+    $x + y$ is encountered along every path from the entry node to $p$, and there is no subsequent
+    use of $x + y$ after the last such placement.
     """
 
     earliest_sets: Dict[BasicBlock, set[Expression]] = _comp_earliest_sets(
@@ -273,9 +308,9 @@ def lazy_code_motion(cfg: ControlFlowGraph) -> MIRInsts:
         lattice=postponable_expr_lattice,
         transfer=postponable_expr_transfer_cluster,
         direction='forward',
-        init_value=postponable_expr_lattice.top(),
-        safe_value=postponable_expr_lattice.bottom(),
-        on_state_change=expr_on_state_change
+        init_value=postponable_expr_lattice.bottom(),
+        safe_value=postponable_expr_lattice.top(),
+        # on_state_change=expr_on_state_change
     )
     postponable_expr_analysis.analyze(strategy='worklist')
 
@@ -307,8 +342,73 @@ def lazy_code_motion(cfg: ControlFlowGraph) -> MIRInsts:
         direction='backward',
         init_value=used_expr_lattice.top(),
         safe_value=used_expr_lattice.top(),
-        on_state_change=expr_on_state_change
+        # on_state_change=expr_on_state_change
     )
     used_expr_analysis.analyze(strategy='worklist')
 
-    return MIRInsts(None)
+
+
+    """
+    Lazy Code Motion Transformation
+    """
+
+    # Create a mapping from expressions to temporary variables.
+    temp_vars = { }
+    for i, expr in enumerate(all_exprs):
+        # Generate unique temp var names
+        temp_vars[expr] = f"lcm_tv_{i}"
+
+    # First pass:
+    #
+    # For all blocks $B$ such that $x + y$ is in $latest[B] \cap used[B].out$,
+    # add $t = x + y$ at the beginning of B.
+
+    blocks_exclude_entry = set(blocks) - {cfg.entry_block()}
+
+    for block in blocks_exclude_entry:
+        if block in latest_sets and latest_sets[block]:
+            # Create new statement to insert
+            for expr in latest_sets[block]:
+                tv = temp_vars[expr]
+                new_mir_inst = MIRInst(
+                    addr=-1,
+                    operand1=deepcopy(expr.operand1),
+                    operand2=deepcopy(expr.operand2),
+                    op=expr.op,
+                    result=Operand(OperandType.VAR, Variable(tv))
+                )
+                block.insts.insert_insts(index=0, insts=new_mir_inst)
+                insert_index = cfg.insts.index_for_inst(block.first_ordinary_inst)
+                cfg.add_new_inst(insert_index, new_mir_inst)
+
+
+    # Second pass:
+    #
+    # For all blocks $B$ such that $x + y$ is in
+    # $$
+    # e\_use_{B} \cap ( \neg latest[B] \cup used[B].out)
+    # $$
+    # replace every original x + y by t.
+
+    for block in blocks_exclude_entry:
+        for statement in block.insts.ret_insts():
+
+            if not statement.is_arithmetic():
+                continue
+
+            dest_var: Variable = statement.result.value
+
+            # Check if this statement computes any of our expressions
+            replaced = False
+            for expr in all_exprs:
+                tv = temp_vars[expr]
+
+                if has_expr(statement, expr) and tv != dest_var.varname:
+
+                    # This statement computes the expression
+                    # Replace with temporary variable.
+                    convert_bin_expr_to_operand(
+                        statement,
+                        Operand(OperandType.VAR, Variable(tv)))
+
+    cfg.reassign_inst_id()

@@ -14,20 +14,16 @@ from cof.base.expr import Expression, ret_expr_from_mir_inst
 from cof.base.semilattice import Semilattice
 
 
-class AnticipatedSemilattice(Semilattice[Set[Expression]]):
+class AnticipatedExprSemilattice(Semilattice[Set[Expression]]):
 
     def __init__(self, all_exprs: Set[Expression]):
         self.all_exprs: Set[Expression] = all_exprs
-
 
     def bottom(self) -> Set[Expression]:
         return self.all_exprs
 
     def meet(self, a: Set[Expression], b: Set[Expression]) -> Set[Expression]:
         return a & b
-
-    def partial_order(self, a: Set[Expression], b: set[Expression]) -> bool:
-        return b.issubset(a)
 
     def top(self) -> Set[Expression]:
         return set()

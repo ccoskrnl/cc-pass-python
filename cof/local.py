@@ -1,14 +1,12 @@
 from typing import Optional
 
-from cof.analysis.dataflow import DataFlowAnalyzer
 from cof.analysis.loop import LoopAnalyzer
 from cof.base.ssa import SSAEdgeBuilder
 from cof.base.cfg import ControlFlowGraph
-from cof.analysis.sccp import sccp_analysis, SCCPAnalyzer
-from cof.early.const_folding import constant_folding
 from cof.base.mir import MIRInsts
-from cof.pre.lcm import lazy_code_motion
+from cof.early import EarlyOptimizer
 
+from cof.early.lazy_code_motion import lazy_code_motion_optimize
 
 class LocalCodeOptimizer:
     def __init__(self, **kwargs):
@@ -30,19 +28,10 @@ class LocalCodeOptimizer:
 
     def optimize(self):
 
-        # +++++++++++++++++++++ Data Flow Analysis Test +++++++++++++++++++++
 
-        # analyzer = DataFlowAnalyzer(cfg=self.cfg)
-        # print("=====================  Preforming Reaching Definitions Analysis  ===================== \n")
-        # analyzer.reaching_definitions()
-        # print("=====================  Preforming Live Variables Analysis  ===================== \n")
-        # analyzer.live_vars()
-        # print("=====================  Preforming Anticipated Expressions Analysis  ===================== \n")
-        # analyzer.anticipated_exprs()
-
-
+        early_optimizer = EarlyOptimizer(self.cfg)
         # +++++++++++++++++++++ Lazy-Code Motion Analysis +++++++++++++++++++++
-        lazy_code_motion(self.cfg)
+        early_optimizer.optimize(method='lazy-code motion')
 
         # +++++++++++++++++++++ SSA Computing +++++++++++++++++++++
         # self.cfg.minimal_ssa()

@@ -2,7 +2,7 @@ from typing import Dict, List, Tuple
 
 from tabulate import tabulate
 
-from cof.analysis.dataflow.anticipated_exprs import AnticipatedSemilattice, AnticipatedTransfer, \
+from cof.analysis.dataflow.anticipated_exprs import AnticipatedExprSemilattice, AnticipatedTransfer, \
     anticipated_exprs_on_state_change
 from cof.analysis.dataflow.framework import DataFlowAnalysisFramework
 from cof.analysis.dataflow.live_vars import LiveVarsLattice, LiveVarsTransfer, live_vars_on_state_change
@@ -84,7 +84,7 @@ class DataFlowAnalyzer:
 
     def anticipated_exprs(self) -> Dict[BasicBlock, set[Expression]]:
         all_exprs = self.cfg.collect_exprs()
-        lattice = AnticipatedSemilattice(all_exprs)
+        lattice = AnticipatedExprSemilattice(all_exprs)
         transfer = AnticipatedTransfer(all_exprs, self.cfg.all_blocks())
         analysis = DataFlowAnalysisFramework(
             cfg=self.cfg,

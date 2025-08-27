@@ -20,9 +20,8 @@ class Semilattice(ABC, Generic[T]):
     def meet(self, a: T, b: T) -> T:
         pass
 
-    @abstractmethod
     def partial_order(self, a: T, b: T) -> bool:
-        pass
+        return self.meet(a, b) == a
 
 class ConstLatState(Enum):
     # NAC, Not a Constant

@@ -310,7 +310,7 @@ class MIRInst:
         self.addr: MIRInstAddr = kwargs['addr']
         self.op = kwargs['op']
         self.operand1: Operand = kwargs['operand1']
-        self.operand2: Operand = kwargs['operand2']
+        self.operand2: Optional[Operand] = kwargs['operand2']
         self.result: Operand = kwargs['result']
     def __hash__(self):
         return hash(self.id)
@@ -522,7 +522,7 @@ class MIRInsts:
         self.phi_insts_idx_end += 1
     def insert_insts(self, index: Optional[int], insts: Union[MIRInst, List[MIRInst]]) -> None:
 
-        if not index or index >= self.num:
+        if index is None or index >= self.num:
             index = self.num
 
         if isinstance(insts, MIRInst):

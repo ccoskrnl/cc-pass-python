@@ -99,7 +99,7 @@ class ControlFlowGraph(ControlFlowGraphForDataFlowAnalysis):
 
         self._construct_cfg()
         self._assign_ranks()
-        self._reassign_inst_id()
+        self.reassign_inst_id()
 
     # ++++++++ Initialization ++++++++
     def _construct_cfg(self):
@@ -792,7 +792,7 @@ class ControlFlowGraph(ControlFlowGraphForDataFlowAnalysis):
         self._rename_variables(def_sites, variables)
 
         # After we have inserted phi function, we need to reassign inst id.
-        self._reassign_inst_id()
+        self.reassign_inst_id()
 
     def ssa_edges_comp(self, loop_info) -> 'SSAEdgeBuilder':
         """
@@ -888,9 +888,10 @@ class ControlFlowGraph(ControlFlowGraphForDataFlowAnalysis):
 
 
     # ++++++++ Management ++++++++
-    def _reassign_inst_id(self):
+    def reassign_inst_id(self):
         for i, inst in enumerate(self.insts.ret_insts()):
             inst.id = i
+            inst.addr = i
 
         self.insts_dict_by_id = {inst.id: inst for inst in self.insts.ret_insts()}
 
