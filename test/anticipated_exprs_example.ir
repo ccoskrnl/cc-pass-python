@@ -1,10 +1,37 @@
-    %entry
-
-    x := a + b
-    y := a * b
-    %goto &L1
-L1:
-    a := 5
-    z := a + b
-
-    %exit
+	%entry
+_B1:
+	b := 3
+	c := 5
+	k := false
+	cond := false
+	%if k %goto &_B5
+_B2:
+	c := 2
+	%goto &_B3
+_B3:
+	printf ( b )
+	%goto &_B4
+_B4:
+	printf ( c )
+	%goto &_B7
+_B5:
+	a := b + c
+	%goto &_B6
+_B6:
+	printf ( a )
+	%goto &_B7
+_B7:
+	d := b + c
+	%goto &_B8
+_B8:
+	printf ( d )
+	%if cond_1 %goto &_B11
+_B9:
+	e := b + c
+	cond := true
+	%goto &_B10
+_B10:
+	printf ( e )
+	%if e %goto &_B9
+_B11:
+	%exit

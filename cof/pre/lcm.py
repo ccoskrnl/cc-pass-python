@@ -130,11 +130,13 @@ def _comp_e_kill_sets(
             if assigned_var is not None:
                 modified_vars.add(assigned_var)
 
+        if modified_vars:
             for expr in all_exprs:
-                if any(var in modified_vars for var in expr.operands):
+                if ((expr.operands[0].value in modified_vars)
+                        or (expr.operands[1].value in modified_vars)):
                     kill.add(expr)
 
-            e_kill_sets[block] = kill
+        e_kill_sets[block] = kill
 
     return e_kill_sets
 
@@ -160,15 +162,16 @@ def _comp_latest_sets(
             ep_list[i] = earliest_set[s] | postponable_in_set[s]
 
         # compute the intersection
-        r = ep_list[0]
-        for ep in ep_list[1:]:
-            r &= ep
+        if ep_list:
+            r = ep_list[0]
+            for ep in ep_list[1:]:
+                r &= ep
 
         # compute \neg
         comp_r = all_exprs - r
 
         # Compute \big( e\_use_{B} \cup \neg \big(\bigcap_{S, succ[B]}(earliest[S] \cup postponable[S].in) \big) \big)
-        second = e_use_set | comp_r
+        second = e_use_set[block] | comp_r
 
         # Compute (earliest[B] \cup postponable[B].in)
         first = earliest_set[block] | postponable_in_set[block]
@@ -201,6 +204,7 @@ def lazy_code_motion(cfg: ControlFlowGraph) -> MIRInsts:
 
     blocks: List[BasicBlock] = cfg.all_blocks()
     all_exprs = cfg.collect_exprs()
+
     e_use_sets: Dict[BasicBlock, set[Expression]] = _comp_e_use_sets(blocks)
     e_kill_sets: Dict[BasicBlock, set[Expression]] = _comp_e_kill_sets(blocks, all_exprs)
 

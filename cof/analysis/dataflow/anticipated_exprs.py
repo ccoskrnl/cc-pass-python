@@ -58,7 +58,9 @@ class AnticipatedTransfer(TransferCluster[BasicBlock, Set[Expression]]):
         return e_use_sets
 
     def _comp_kill_sets(self) -> Dict[BasicBlock, Set[Expression]]:
+
         e_kill_sets = { }
+
         for block in self.blocks:
             kill = set()
 
@@ -69,11 +71,13 @@ class AnticipatedTransfer(TransferCluster[BasicBlock, Set[Expression]]):
                 if assigned_var is not None:
                     modified_vars.add(assigned_var)
 
+            if modified_vars:
                 for expr in self.all_exprs:
-                    if any(var in modified_vars for var in expr.operands):
+                    if ((expr.operands[0].value in modified_vars)
+                            or (expr.operands[1].value in modified_vars)):
                         kill.add(expr)
 
-                e_kill_sets[block] = kill
+            e_kill_sets[block] = kill
 
         return e_kill_sets
 
