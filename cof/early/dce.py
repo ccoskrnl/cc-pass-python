@@ -2,7 +2,7 @@
 from typing import Tuple, Dict
 
 from cof.analysis.sccp import SCCPAnalyzer
-from cof.base.mir import MIRInstId, MIRInsts
+from cof.base.mir.inst import MIRInsts, MIRInstId
 
 
 def control_flow_dce(sccp_analyzer: SCCPAnalyzer) -> MIRInsts:
@@ -11,7 +11,7 @@ def control_flow_dce(sccp_analyzer: SCCPAnalyzer) -> MIRInsts:
     inst_succ = sccp_analyzer.fatten_blocks.succ
     original_inst = sccp_analyzer.cfg.insts.ret_insts()
     id_2_inst = sccp_analyzer.cfg.insts_dict_by_id
-    dec_insts = MIRInsts(None)
+    dec_insts = MIRInsts()
 
     for inst in original_inst:
         for succ_id in inst_succ[inst.id]:

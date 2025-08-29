@@ -1,12 +1,11 @@
 from typing import Optional
 
 from cof.analysis.loop import LoopAnalyzer
+from cof.base.mir.inst import MIRInsts
 from cof.base.ssa import SSAEdgeBuilder
 from cof.base.cfg import ControlFlowGraph
-from cof.base.mir import MIRInsts
 from cof.early import EarlyOptimizer
 
-from cof.early.lazy_code_motion import lazy_code_motion_optimize
 
 class LocalCodeOptimizer:
     def __init__(self, **kwargs):

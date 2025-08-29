@@ -1,7 +1,7 @@
 from collections import defaultdict
 from typing import Optional, List, Dict
 
-from cof.base.cfg import ControlFlowGraph, BasicBlock, BasicBlockId
+from cof.base.cfg import BasicBlock, BasicBlockId
 
 
 class Loop:

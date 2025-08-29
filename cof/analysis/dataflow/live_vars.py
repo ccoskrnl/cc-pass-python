@@ -1,9 +1,8 @@
-from copy import deepcopy
-from typing import List, Dict
+from typing import Dict
 
 from cof.analysis.dataflow.framework import TransferCluster
 from cof.base.bb import BasicBlock
-from cof.base.mir import Variable
+from cof.base.mir.variable import Variable
 from cof.base.semilattice import Semilattice, T
 
 

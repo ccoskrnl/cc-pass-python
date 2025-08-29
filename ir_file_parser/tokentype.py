@@ -1,6 +1,8 @@
 from enum import Enum
-from cof.base.mir import Op
 import re
+
+from cof.base.mir.operator import Op
+
 
 class TokenType(Enum):
 

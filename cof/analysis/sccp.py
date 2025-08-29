@@ -1,10 +1,12 @@
 from collections import deque
 from typing import Dict, List, Tuple
 
+from cof.base.mir.eval import mir_eval
+from cof.base.mir.inst import MIRInstId, MIRInst, MIRInsts
+from cof.base.mir.operand import Operand
 from cof.base.ssa import SSAEdgeBuilder, SSAVariable
 from cof.base.cfg import ControlFlowGraph, FlattenBasicBlocks
 from cof.base.semilattice import ConstLattice
-from cof.base.mir import MIRInst, MIRInstId, Operand, mir_eval, MIRInsts
 
 
 class SCCPAnalyzer:

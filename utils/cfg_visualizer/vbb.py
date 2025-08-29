@@ -7,7 +7,7 @@ from PyQt6.QtWidgets import QGraphicsTextItem, QGraphicsRectItem, QGraphicsItem,
     QApplication, QGraphicsPathItem
 
 from cof.base.bb import BasicBlock, BasicBlockBranchType, EdgeType
-from cof.base.mir import MIRInst
+from cof.base.mir.inst import MIRInst
 
 
 class VisualBasicBlock(BasicBlock):

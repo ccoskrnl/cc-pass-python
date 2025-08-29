@@ -1,7 +1,9 @@
 from dataclasses import dataclass
 from typing import Optional
 
-from cof.base.mir import Op, MIRInstAddr, op_str, Operand, MIRInst
+from cof.base.mir.inst import MIRInstAddr, MIRInst
+from cof.base.mir.operand import Operand
+from cof.base.mir.operator import op_str, Op
 
 
 @dataclass

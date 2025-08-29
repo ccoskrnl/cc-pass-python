@@ -1,11 +1,16 @@
 import random
 from abc import ABC, abstractmethod
 from collections import deque, defaultdict
+from pathlib import Path
 from typing import Tuple, Optional, Dict, List, Union
 
 from cof.base.bb import BasicBlock, BasicBlockId, BasicBlockBranchType, BranchType
-from cof.base.expr import Expression, ret_expr_from_mir_inst
-from cof.base.mir import MIRInstId, MIRInst, Args, OperandType, Operand, Op, MIRInsts, Variable, MIRInstAddr
+from cof.base.mir.args import Args
+from cof.base.mir.expr import Expression, ret_expr_from_mir_inst
+from cof.base.mir.inst import MIRInstAddr, MIRInst, MIRInsts, MIRInstId
+from cof.base.mir.operand import OperandType, Operand
+from cof.base.mir.operator import Op
+from cof.base.mir.variable import Variable
 from cof.base.ssa import SSAEdgeBuilder, SSAEdge, SSAVariable, create_phi_function, has_phi_for_var
 
 
@@ -529,6 +534,7 @@ class ControlFlowGraph(ControlFlowGraphForDataFlowAnalysis):
         #     if ret_expr_from_mir_inst(inst) is not None
         # }
 
+
     # ++++++++ SSA ++++++++
     def _dom_front(self):
         """
@@ -901,8 +907,6 @@ class ControlFlowGraph(ControlFlowGraphForDataFlowAnalysis):
                 if not inst.is_phi():
                     self.block_by_inst_addr[inst.addr] = block
 
-
-
     def new_a_block(self, bb_id: BasicBlockId, block_insts: List[MIRInst]) -> BasicBlock:
         src_vertex = BasicBlock(bb_id, block_insts)
 
@@ -917,7 +921,8 @@ class ControlFlowGraph(ControlFlowGraphForDataFlowAnalysis):
             return self.block_by_inst_id[inst]
         elif isinstance(inst, MIRInst):
             return self.block_by_inst_id[inst.id]
-        return None
+        else:
+            return None
 
     def add_new_inst(self, index: int, inst: MIRInst):
         """
@@ -942,6 +947,21 @@ class ControlFlowGraph(ControlFlowGraphForDataFlowAnalysis):
 
         self._dom_front()
         self._df_plus(self.block_id_set)
+
+
+    # ++++++++ Output ++++++++
+    def output_mir(self, output_file):
+
+        output_path = Path(output_file)
+        output_dir = output_path.parent
+        if output_dir and not output_dir.exists():
+            output_dir.mkdir(parents=True, exist_ok=True)
+
+        with open(output_file, mode='w', encoding='utf-8') as file:
+            file.write(str(self.insts))
+
+
+
 
 
 class ReversedCFG(ControlFlowGraphABC):

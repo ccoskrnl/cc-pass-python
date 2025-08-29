@@ -1,6 +1,7 @@
 from enum import Enum
 from typing import List, Optional, Dict
-from cof.base.mir import MIRInsts, MIRInst
+
+from cof.base.mir.inst import MIRInst, MIRInsts
 
 type BasicBlockId = int
 

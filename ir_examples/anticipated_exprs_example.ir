@@ -1,7 +1,10 @@
+$function test1 ( b c )
 	%entry
+	%init b
+	%init c
 _B1:
-	b := 3
-	c := 5
+	# b := 3
+	# c := 5
 	k := false
 	cond := false
 	%if k %goto &_B5
@@ -35,3 +38,4 @@ _B10:
 	%if e %goto &_B9
 _B11:
 	%exit
+$end function

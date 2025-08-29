@@ -119,7 +119,7 @@ class DataFlowAnalysisFramework(Generic[T, B]):
 
 - [x] 数据流分析框架
 - [x] 稀有条件常量传播(符号执行)
-- [ ] Lazy-Code Motion
+- [x] Lazy-Code Motion
 - [ ] 循环依赖分析
 - [ ] 别名分析
 - [ ] 高级数据流分析

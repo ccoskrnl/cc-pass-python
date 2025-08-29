@@ -1,9 +1,5 @@
-from typing import Dict
-
-from cof.analysis.dataflow.framework import TransferCluster, B
-from cof.base.bb import BasicBlock
-from cof.base.expr import Expression
-from cof.base.semilattice import Semilattice, T
+from cof.base.mir.expr import Expression
+from cof.base.semilattice import Semilattice
 
 
 class AvailableExprSemilattice(Semilattice[set[Expression]]):

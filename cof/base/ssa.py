@@ -1,7 +1,11 @@
 from collections import defaultdict
-from typing import Dict, Tuple
+from typing import Dict, Tuple, Union, Optional, List
 
-from cof.base.mir import *
+from cof.base.mir.args import Args
+from cof.base.mir.inst import MIRInst, MIRInstId
+from cof.base.mir.operand import Operand, OperandType
+from cof.base.mir.operator import Op
+from cof.base.mir.variable import Variable
 
 
 class SSAVariable:

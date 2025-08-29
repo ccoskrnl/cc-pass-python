@@ -1,7 +1,12 @@
 from cof.local import LocalCodeOptimizer
-from cof.base.cfg.visualizer import visualize_cfg
-from cof.base.mir import MIRInsts
-from test import testing
+from cof.base.mir.inst import MIRInsts
+from ir_file_parser import Parser
+
+
+def testing() -> MIRInsts:
+    p = Parser("ir_examples/anticipated_exprs_example.ir")
+    return p.parse()
+
 
 if __name__ == "__main__":
     insts: MIRInsts = testing()
@@ -9,4 +14,3 @@ if __name__ == "__main__":
     local_optimizer.initialize()
     final_insts = local_optimizer.optimize()
 
-    visualize_cfg(local_optimizer.cfg)

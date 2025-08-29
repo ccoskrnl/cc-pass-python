@@ -10,7 +10,7 @@
 from typing import Dict, Set, List, Optional
 from cof.analysis.dataflow.framework import TransferCluster
 from cof.base.bb import BasicBlock
-from cof.base.expr import Expression, ret_expr_from_mir_inst
+from cof.base.mir.expr import Expression, ret_expr_from_mir_inst
 from cof.base.semilattice import Semilattice
 
 

@@ -2,8 +2,8 @@ import bisect
 from collections import deque
 from typing import Dict, Set
 
+from cof.base.cfg import ControlFlowGraph
 from .vbb import VisualBasicBlock
-from .. import ControlFlowGraph
 
 TITLE_GAP = 5
 CONTENT_GAP = 1

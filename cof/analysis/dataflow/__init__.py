@@ -10,8 +10,8 @@ from cof.analysis.dataflow.reaching_defs import DefPoint, ReachingDefsProductSem
     reaching_defs_on_state_change
 from cof.base.bb import BasicBlock
 from cof.base.cfg import ControlFlowGraphForDataFlowAnalysis
-from cof.base.expr import Expression
-from cof.base.mir import Variable
+from cof.base.mir.expr import Expression
+from cof.base.mir.variable import Variable
 
 
 class DataFlowAnalyzer:

@@ -5,8 +5,10 @@ from cof.analysis.dataflow import DataFlowAnalysisFramework
 from cof.analysis.dataflow.framework import TransferCluster
 from cof.base.bb import BasicBlock, BasicBlockId
 from cof.base.cfg import ControlFlowGraph
-from cof.base.expr import Expression, ret_expr_from_mir_inst, has_expr, convert_bin_expr_to_operand
-from cof.base.mir import MIRInst, Variable, Operand, OperandType
+from cof.base.mir.expr import Expression, has_expr, convert_bin_expr_to_operand, ret_expr_from_mir_inst
+from cof.base.mir.inst import MIRInst
+from cof.base.mir.operand import OperandType, Operand
+from cof.base.mir.variable import Variable
 from cof.base.semilattice import Semilattice
 
 

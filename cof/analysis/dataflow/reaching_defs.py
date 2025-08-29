@@ -1,12 +1,11 @@
-from collections import defaultdict
-from copy import deepcopy
-from typing import Set, List, Dict, Tuple
+from typing import List, Dict, Tuple
 
 from tabulate import tabulate
 
 from cof.analysis.dataflow.framework import TransferCluster, B
 from cof.base.bb import BasicBlock
-from cof.base.mir import MIRInstAddr, Variable
+from cof.base.mir.inst import MIRInstAddr
+from cof.base.mir.variable import Variable
 from cof.base.semilattice import Semilattice, T
 
 type DefPoint = MIRInstAddr

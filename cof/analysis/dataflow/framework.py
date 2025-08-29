@@ -2,9 +2,6 @@ from abc import ABC, abstractmethod
 from copy import deepcopy
 from typing import Generic, TypeVar, Dict, Optional, Callable, Iterable
 
-from cof.base.cfg import ControlFlowGraphForDataFlowAnalysis
-from cof.base.semilattice import Semilattice
-
 T = TypeVar("T")
 B = TypeVar("B")
 

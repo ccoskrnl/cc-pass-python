@@ -8,7 +8,7 @@ from PyQt6.QtWidgets import (QMainWindow, QGraphicsView, QGraphicsScene,
 
 from .tree_layout import CFGLayout, Tree, TreeLayout
 from .vbb import VisualBasicBlock, BlockItem, EdgeItem
-from .. import ControlFlowGraph
+from cof.base.cfg import ControlFlowGraph
 
 
 class CFGVisualizer(QMainWindow):
