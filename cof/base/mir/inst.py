@@ -1,8 +1,10 @@
-from typing import Optional, List, Callable, Any, Union
+from typing import Optional, List, Callable, Any, Union, Dict
 
 from cof.base.mir.operand import Operand, OperandType, Const_Operand_Type
 from cof.base.mir.operator import Op, op_str, Evaluatable_Op, Arithmetic_Op, Assignment_Op, Expression_Op
 from cof.base.mir.variable import Variable
+
+
 
 # ++++++++++++++++++++++++ MIR ++++++++++++++++++++
 
@@ -38,21 +40,23 @@ class MIRInst:
         inst.operand2 = Operand(Arg( arg1, arg 2))
 
     """
-    def __init__(self, **kwargs):
-        self.global_id: MIRInstId = new_id()
-        self.id: MIRInstId = 0
-        self.addr: MIRInstAddr = kwargs['addr']
-        self.op = kwargs['op']
-        self.operand1: Operand = kwargs['operand1']
-        self.operand2: Optional[Operand] = kwargs['operand2']
-        self.result: Operand = kwargs['result']
+    def __init__(self, offset, op, operand1, operand2, result):
+        self.unique_id: MIRInstId = new_id()
+        # self.id: MIRInstId = 0
+        self.addr: MIRInstAddr = 0
+        self.offset: MIRInstAddr = offset
+        self.op = op
+        self.operand1: Operand = operand1
+        self.operand2: Optional[Operand] = operand2
+        self.result: Optional[Operand] = result
     def __hash__(self):
-        return hash(self.id)
+        return hash(self.unique_id)
     def __eq__(self, other):
-        if not isinstance(other, MIRInst):
-            return False
-        return self.id == other.id
-    def __repr__(self):
+        # if not isinstance(other, MIRInst):
+        #     return False
+        return self.unique_id == other.unique_id
+
+    def __str__(self):
         formatter = {
             Op.IF: self._format_branch,
             Op.GOTO: self._format_jump,
@@ -62,11 +66,15 @@ class MIRInst:
             Op.PRINT: self._format_print,
             Op.CALL: self._format_call,
             Op.PHI: self._format_phi,
-            Op.INIT: self._format_init
+            Op.INIT: self._format_init,
+            Op.FUNCTION_DEF: self._format_func,
         }.get(self.op, self._format_operator)
 
-        # return f"[ID:{self.id}]    {formatter()}"
-        return formatter()
+        # return formatter()
+        return f"[addr:{self.addr:>{4}}]    {formatter()}"
+
+    # def __repr__(self):
+    #     return f"[addr:{self.addr:>{4}}]    {str(self)}"
 
     def _format_init(self):
         return f"%init {_val(self.result)}"
@@ -105,6 +113,8 @@ class MIRInst:
             f"{_val(self.operand1)}("
             f"{_val(self.operand2)})"
         )
+    def _format_func(self):
+        return str(self.operand1.value)
 
     def is_evaluatable(self) -> bool:
         return True if self.op in Evaluatable_Op else False
@@ -124,6 +134,9 @@ class MIRInst:
         return True if self.op == Op.PHI else False
     def is_init(self) -> bool:
         return True if self.op == Op.INIT else False
+    def is_func(self) -> bool:
+        return True if self.op == Op.FUNCTION_DEF else False
+
 
     def ret_dest_variable(self) -> Optional[Operand]:
         """
@@ -213,18 +226,42 @@ class MIRInst:
 
 
 class MIRInsts:
-    def __init__(self, insts:Optional[List[MIRInst]]=None):
-        if insts:
-            self.ir_insts: List[MIRInst] = insts
-            self.num: int = len(insts)
-        else:
-            self.ir_insts: List[MIRInst] = []
-            self.num: int = 0
 
+    # global_insts_dict_by_id: Dict[MIRInstId, MIRInst] = { }
+    insts_dict_by_id: Dict[MIRInstId, MIRInst] = { }
+
+    def __init__(self, insts:Optional[List[MIRInst]]=None):
+
+        self.ir_insts: List[MIRInst] = []
+        self.num: int = 0
+        # self.insts_dict_by_id: Dict[MIRInstId, MIRInst] = { }
         self.phi_insts_idx_end: int = 0
+
+        self._initialize(insts)
+
+    def _initialize(self, insts):
+        if insts:
+            self.ir_insts = insts
+            self.insts_dict_by_id = {inst.unique_id: inst for inst in insts}
+            self.num = len(insts)
+
 
     def __str__(self):
         return "\n".join(map(str, self.ir_insts))
+
+    def assign_addr(self, base: int = 0) -> int:
+        for i in self.ir_insts:
+            i.addr = base
+            if i.op == Op.FUNCTION_DEF:
+                func_code: 'MIRInsts' = i.operand1.value.insts
+                base = func_code.assign_addr(base=base)
+
+
+            base += 1
+
+        return base
+
+
 
     # def __repr__(self):
     #     return "\n".join(map(str, self.ir_insts))
@@ -247,36 +284,54 @@ class MIRInsts:
         return False
 
     def inst_exist_by_id(self, inst_id: int) -> bool:
-        for i in self.ret_insts():
-            if i.id == inst_id:
-                return True
-        return False
+        result =  self.insts_dict_by_id.get(inst_id, False)
+        if result is not False:
+            return True
+        else:
+            return False
+
     def inst_exist_by_addr(self, addr: int) -> bool:
         for inst in self.ret_insts():
-            if inst.addr == addr:
+            if inst.offset == addr:
                 return True
         return False
 
     def add_phi_inst(self, phi_inst: MIRInst) -> None:
         self.ir_insts.insert(0, phi_inst)
         self.phi_insts_idx_end += 1
-    def insert_insts(self, index: Optional[int], insts: Union[MIRInst, List[MIRInst]]) -> None:
+        self.insts_dict_by_id[phi_inst.unique_id] = phi_inst
+
+    def insert_insts(self, insts: Union[MIRInst, List[MIRInst]], index: Optional[int] = None) -> None:
 
         if index is None or index >= self.num:
             index = self.num
 
         if isinstance(insts, MIRInst):
             self.ir_insts.insert(index, insts)
+            self.insts_dict_by_id[insts.unique_id] = insts
             self.num += 1
+
         elif isinstance(insts, List) and all(isinstance(item, MIRInst) for item in insts):
             self.ir_insts[index:index] = insts
             self.num += len(insts)
+            for i in insts:
+                self.insts_dict_by_id[i.unique_id] = i
+
+    def inst_by_id(self, inst_id: MIRInstId) -> Optional[MIRInst]:
+        dest_inst = self.insts_dict_by_id.get(inst_id, None)
+        # if dest_inst is None:
+        #     for inst in self.ir_insts:
+        #         if inst.op == Op.FUNCTION_DEF:
+        #             func = inst.operand1.value
+        #             dest_inst = func.insts.inst_by_id(inst_id)
+        return dest_inst
 
     def find_inst_by_key(self, *, key: str, value: Any) -> Optional[MIRInst]:
         for inst in self.ir_insts:
             if getattr(inst, key) == value:
                 return inst
         return None
+
     # find_inst(lambda i: i.addr == 0x1000)
     def find_inst(self, predicate: Callable[[MIRInst], bool]) -> Optional[MIRInst]:
         for inst in self.ir_insts:
@@ -300,7 +355,7 @@ class MIRInsts:
         return self.ir_insts[self.phi_insts_idx_end:]
 
     def highset_addr(self) -> int:
-        return self.ir_insts[-1].addr
+        return self.ir_insts[-1].offset
 
     def print(self):
         for inst in self.ir_insts:

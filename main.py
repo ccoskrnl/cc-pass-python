@@ -1,16 +1,35 @@
-from cof.local import LocalCodeOptimizer
+from pathlib import Path
+from typing import List, Tuple
+
+from cof import CodeOptimizer
+from cof.base.mir.function import MIRFunction
 from cof.base.mir.inst import MIRInsts
 from ir_file_parser import Parser
 
 
-def testing() -> MIRInsts:
-    p = Parser("ir_examples/anticipated_exprs_example.ir")
-    return p.parse()
+def testing() -> Tuple[MIRInsts, List[MIRFunction]]:
+    p = Parser("ir_examples/example1.ir")
+    p.parse()
+    p.insts.assign_addr()
+    return p.insts, p.func_list
+
+
+# ++++++++ Output ++++++++
+def output_mir(insts, output_file):
+
+    output_path = Path(output_file)
+    output_dir = output_path.parent
+    if output_dir and not output_dir.exists():
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+    with open(output_file, mode='w', encoding='utf-8') as file:
+        file.write(str(insts))
 
 
 if __name__ == "__main__":
-    insts: MIRInsts = testing()
-    local_optimizer = LocalCodeOptimizer(insts=insts)
-    local_optimizer.initialize()
-    final_insts = local_optimizer.optimize()
+    global_insts, func_list = testing()
+    optimizer = CodeOptimizer(global_insts, func_list)
+    optimizer.process_local_func()
+    print(global_insts)
+    output_mir(global_insts, "ir_examples/output/opt_example1.ir")
 

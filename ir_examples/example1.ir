@@ -39,3 +39,35 @@ _B10:
 _B11:
 	%exit
 $end function
+
+$function test2 ( n )
+    %entry
+	%init n
+
+    k := false
+    i := 1
+    j := 2
+L1:
+    cond1 := i <= n
+    %if cond1 %goto &L2
+    %if k %goto &L4
+    i := i + 1
+    %goto &L5
+L2:
+    j := j * 2
+    k := %true
+    cond2 := i <= 5
+    %if cond2 %goto &L3
+    i := i - 1
+    %goto &L1
+L3:
+    i := i + 1
+    %goto &L1
+L4:
+    printf ( i j k )
+    %goto &L5
+
+L5:
+    %exit
+
+$end function

@@ -379,7 +379,7 @@ class CFGLayout:
         while queue:
             current_node = queue.popleft()
 
-            for succ_vbb in current_node.vbb.succ_vbbs:
+            for succ_vbb in current_node.vbb.succ_vbb_s:
                 if current_node.vbb.rank < succ_vbb.rank:
                     if succ_vbb.tree:
                         continue

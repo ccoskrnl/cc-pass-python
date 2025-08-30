@@ -1,11 +1,12 @@
+import sys
 from typing import List, Dict
 
 from cof.base.mir.args import Args
+from cof.base.mir.function import MIRFunction
 from cof.base.mir.inst import MIRInsts, MIRInst
 from cof.base.mir.operand import OperandType, Operand
 from cof.base.mir.variable import Variable
 from .tokentype import *
-import sys
 
 token_type_2_operand_type: Dict[TokenType, OperandType] = {
 
@@ -18,123 +19,159 @@ token_type_2_operand_type: Dict[TokenType, OperandType] = {
     TokenType.STR: OperandType.STR,
 }
 
-def token_type_to_operand_type(token_type: TokenType) -> OperandType:
+
+def _token_type_to_operand_type(token_type: TokenType) -> OperandType:
     assert token_type != TokenType.UNKNOWN
     return token_type_2_operand_type[token_type]
+
+
+def _recognize_token(text) -> List[Token]:
+    tokens = text.split()
+    token_sequence: List[Token] = [ ]
+
+    for value in tokens:
+        if value in OP_KEYWORDS:
+            token_sequence.append(Token(TokenType.OP, get_op_type(value)))
+        elif value == BOOL_FALSE_VALUE:
+            token_sequence.append(Token(TokenType.BOOL, False))
+        elif value == BOOL_TRUE_VALUE:
+            token_sequence.append(Token(TokenType.BOOL, True))
+        elif re.match(OP_PATTERN, value):
+            token_sequence.append(Token(TokenType.OP, get_op_type(value)))
+        elif re.match(VAR_NAME_PATTERN, value):
+            token_sequence.append(Token(TokenType.VAR, Variable(value)))
+        elif re.match(INT_PATTERN, value):
+            try:
+                num = int(value)
+                token_sequence.append(Token(TokenType.INT, num))
+            except ValueError as e:
+                print("\nfatal error: ")
+                # print(f"error processing value on line {current_line} ")
+                print(f"value: '{value}' cannot be converted to an integer")
+                print(f"error type: {type(e).__name__}")
+                print(f"details: {str(e)}")
+
+                import traceback
+                traceback.print_exc()
+
+                sys.exit(-1)
+        elif re.match(FLOAT_PATTERN, value):
+            try:
+                num = float(value)
+                token_sequence.append(Token(TokenType.FLOAT, num))
+            except ValueError as e:
+                print("\nfatal error: ")
+                # print(f"error processing value on line {current_line} ")
+                print(f"value: '{value}' cannot be converted to an float")
+                print(f"error type: {type(e).__name__}")
+                print(f"details: {str(e)}")
+
+                import traceback
+                traceback.print_exc()
+
+                sys.exit(-1)
+        elif re.match(LABEL_REF_PATTERN, value):
+            # token_sequence.append(Token(TokenType.ADDR, self.labels_table[value[1:]]))
+            token_sequence.append(Token(TokenType.ADDR, value[1:]))
+
+        elif re.match(PARENTHESIS_PATTERN, value):
+            token_sequence.append(Token(TokenType.PRUN, value))
+        else:
+            print("\nfatal error: ")
+            print("Cannot recognize the token...")
+            import traceback
+            traceback.print_exc()
+
+            sys.exit(-1)
+
+    return token_sequence
+
 
 class Parser:
     counter = 0
     def __init__(self, filename):
         self.labels_table = { }
         self.ir_file = filename
+        self.insts: MIRInsts = MIRInsts()
+        self.func_list: List[MIRFunction] = [ ]
 
-    def parse(self) -> MIRInsts:
-        insts = MIRInsts(None)
-        index = 0
-        need_to_add_label = False
-        label_tag: str = ""
-
+    def _ignore_comments(self) -> List[str]:
+        lines = [ ]
         with open(self.ir_file, 'r', encoding="utf-8") as ir_file:
-            content = ""
-
+            # ignore comments
             for line in ir_file.read().split('\n'):
                 line = line.strip()
-                if line and line[0] == '#':
+                if line and line[0] == '#' or not line:
                     continue
-                content += line + '\n'
+                lines.append(line)
+        return lines
 
-            lines = [ ]
-            for line in content.split('\n'):
-                if not line:
-                    continue
-                if re.match(LABEL_DEF_PATTERN, line):
-                    # label_tag defined by user.
-                    label_tag = line.strip()[0:-1]
-                    self.labels_table[label_tag] = index
-                else:
-                    index += 1
-                    lines.append(line)
+    def _handle_branch_jump(self, insts):
+        for inst in insts.ret_insts():
+            if inst.is_func():
+                func: MIRFunction = inst.operand1.value
+                func_insts = func.insts
+                self._handle_branch_jump(func_insts)
+            elif inst.is_if():
+                inst.result.value = self.labels_table[inst.result.value]
+            elif inst.is_goto():
+                inst.result.value = self.labels_table[inst.result.value]
 
-            for line in lines:
-                if not re.match(LABEL_DEF_PATTERN, line):
-                    insts.insert_insts(None, self.generate_an_inst(line))
+    def parse(self):
+        lines = self._ignore_comments()
+        num_of_lines = len(lines)
+        i_for_lines = 0
 
+        while i_for_lines < num_of_lines:
 
+            func_def_match = re.match(FUNCTION_DEF_PATTERN, lines[i_for_lines])
 
-        return insts
+            if not re.match(LABEL_DEF_PATTERN, lines[i_for_lines]) and not func_def_match:
+                self.insts.insert_insts(self._generate_an_inst(lines[i_for_lines]))
 
-    def recognize_token(self, text) -> List[Token]:
-        tokens = text.split()
-        token_sequence: List[Token] = [ ]
+            if func_def_match:
 
-        for value in tokens:
-            if value in OP_KEYWORDS:
-                token_sequence.append(Token(TokenType.OP, get_op_type(value)))
-            elif value == BOOL_FALSE_VALUE:
-                token_sequence.append(Token(TokenType.BOOL, False))
-            elif value == BOOL_TRUE_VALUE:
-                token_sequence.append(Token(TokenType.BOOL, True))
-            elif re.match(OP_PATTERN, value):
-                token_sequence.append(Token(TokenType.OP, get_op_type(value)))
-            elif re.match(VAR_NAME_PATTERN, value):
-                token_sequence.append(Token(TokenType.VAR, Variable(value)))
-            elif re.match(INT_PATTERN, value):
-                try:
-                    num = int(value)
-                    token_sequence.append(Token(TokenType.INT, num))
-                except ValueError as e:
-                    print("\nfatal error: ")
-                    # print(f"error processing value on line {current_line} ")
-                    print(f"value: '{value}' cannot be converted to an integer")
-                    print(f"error type: {type(e).__name__}")
-                    print(f"details: {str(e)}")
+                function_name = func_def_match.group(1)
+                args_list = [arg.strip() for arg in func_def_match.group(2).split() if arg.strip()]
+                func = MIRFunction(function_name, args_list)
+                self.func_list.append(func)
+                self.insts.insert_insts(MIRInst(
+                    self.counter,
+                    op=Op.FUNCTION_DEF,
+                    operand1=Operand(OperandType.FUNCTION, func),
+                    operand2=None,
+                    result=None))
 
-                    import traceback
-                    traceback.print_exc()
+                func_code = [ ]
+                i_for_lines += 1
+                while i_for_lines < num_of_lines and not re.match(FUNCTION_END_PATTERN, lines[i_for_lines]):
+                    func_code.append(lines[i_for_lines])
+                    i_for_lines += 1
 
-                    sys.exit(-1)
-            elif re.match(FLOAT_PATTERN, value):
-                try:
-                    num = float(value)
-                    token_sequence.append(Token(TokenType.FLOAT, num))
-                except ValueError as e:
-                    print("\nfatal error: ")
-                    # print(f"error processing value on line {current_line} ")
-                    print(f"value: '{value}' cannot be converted to an float")
-                    print(f"error type: {type(e).__name__}")
-                    print(f"details: {str(e)}")
+                if i_for_lines >= num_of_lines:
+                    raise "fatal: syntax error"
 
-                    import traceback
-                    traceback.print_exc()
+                self._parse_a_function(func_code, func)
 
-                    sys.exit(-1)
-            elif re.match(LABEL_REF_PATTERN, value):
-                token_sequence.append(Token(TokenType.ADDR, self.labels_table[value[1:]]))
-            elif re.match(PARENTHESIS_PATTERN, value):
-                token_sequence.append(Token(TokenType.PRUN, value))
-            else:
-                print("\nfatal error: ")
-                print("Cannot recognize the token...")
-                import traceback
-                traceback.print_exc()
+            i_for_lines += 1
 
-                sys.exit(-1)
+        self._handle_branch_jump(self.insts)
 
-        return token_sequence
-
-
-    def generate_an_inst(self, text) -> MIRInst:
+    def _generate_an_inst(self, text, label:str = None) -> MIRInst:
 
         inst = MIRInst(
-            addr=self.counter,
+            offset=self.counter,
             op=Op.UNKNOWN,
             operand1=None,
             operand2=None,
             result=None)
         self.counter += 1
 
+        if label is not None:
+            self.labels_table[label] = inst.unique_id
 
-        token_seq: List[Token] = self.recognize_token(text)
+
+        token_seq: List[Token] = _recognize_token(text)
         # result := operand1 Op operand2
         if (
             len(token_seq) == 5
@@ -147,17 +184,17 @@ class Parser:
             inst.op = token_seq[3].value
 
             inst.operand1 = Operand(
-                token_type_to_operand_type(token_seq[2].token_type)
+                _token_type_to_operand_type(token_seq[2].token_type)
                 , token_seq[2].value
             )
 
             inst.operand2 = Operand(
-                token_type_to_operand_type(token_seq[4].token_type)
+                _token_type_to_operand_type(token_seq[4].token_type)
                 , token_seq[4].value
             )
 
             inst.result = Operand(
-                token_type_to_operand_type(token_seq[0].token_type)
+                _token_type_to_operand_type(token_seq[0].token_type)
                 , token_seq[0].value
             )
 
@@ -171,12 +208,12 @@ class Parser:
         ):
             inst.op = Op.IF
             inst.operand1 = Operand(
-                token_type_to_operand_type(token_seq[1].token_type)
+                _token_type_to_operand_type(token_seq[1].token_type)
                 , token_seq[1].value
             )
 
             inst.result = Operand(
-                token_type_to_operand_type(token_seq[3].token_type)
+                _token_type_to_operand_type(token_seq[3].token_type)
                 , token_seq[3].value
             )
 
@@ -189,11 +226,11 @@ class Parser:
         ):
             inst.op = Op.ASSIGN
             inst.operand1 = Operand(
-                token_type_to_operand_type(token_seq[2].token_type)
+                _token_type_to_operand_type(token_seq[2].token_type)
                 , token_seq[2].value
             )
             inst.result = Operand(
-                token_type_to_operand_type(token_seq[0].token_type)
+                _token_type_to_operand_type(token_seq[0].token_type)
                 , token_seq[0].value
             )
 
@@ -205,7 +242,7 @@ class Parser:
         ):
             inst.op = Op.GOTO
             inst.result = Operand(
-                token_type_to_operand_type(token_seq[1].token_type)
+                _token_type_to_operand_type(token_seq[1].token_type)
                 , token_seq[1].value
             )
 
@@ -219,17 +256,17 @@ class Parser:
         ):
             inst.op = Op.CALL_ASSIGN
             inst.result = Operand(
-                token_type_to_operand_type(token_seq[0].token_type)
+                _token_type_to_operand_type(token_seq[0].token_type)
                 , token_seq[0].value
             )
             inst.operand1 = Operand(
-                token_type_to_operand_type(token_seq[2].token_type)
+                _token_type_to_operand_type(token_seq[2].token_type)
                 , token_seq[2].value
             )
             args = [ ]
             for i in range(4, len(token_seq) - 1):
                 args.append(Operand(
-                    token_type_to_operand_type(token_seq[i].token_type)
+                    _token_type_to_operand_type(token_seq[i].token_type)
                     , token_seq[i].value
                 ))
             inst.operand2 = Operand(OperandType.ARGS, Args(args))
@@ -242,13 +279,13 @@ class Parser:
         ):
             inst.op = Op.CALL
             inst.operand1 = Operand(
-                token_type_to_operand_type(token_seq[0].token_type)
+                _token_type_to_operand_type(token_seq[0].token_type)
                 , token_seq[0].value
             )
             args = [ ]
             for i in range(2, len(token_seq) - 1):
                 args.append(Operand(
-                    token_type_to_operand_type(token_seq[i].token_type)
+                    _token_type_to_operand_type(token_seq[i].token_type)
                     , token_seq[i].value
                 ))
             inst.operand2 = Operand(OperandType.ARGS, Args(args))
@@ -260,7 +297,7 @@ class Parser:
         ):
             inst.op = Op.PRINT
             inst.operand1 = Operand(
-                token_type_to_operand_type(token_seq[1].token_type)
+                _token_type_to_operand_type(token_seq[1].token_type)
                 , token_seq[1].value
             )
 
@@ -271,7 +308,7 @@ class Parser:
         ):
             inst.op = Op.INIT
             inst.result = Operand(
-                token_type_to_operand_type(token_seq[1].token_type)
+                _token_type_to_operand_type(token_seq[1].token_type)
                 , token_seq[1].value
             )
 
@@ -292,3 +329,18 @@ class Parser:
             sys.exit(-1)
 
         return inst
+
+    def _parse_a_function(self, local_code: List[str], func: MIRFunction):
+
+        label = None
+        for line in local_code:
+            if not re.match(LABEL_DEF_PATTERN, line):
+                inst = self._generate_an_inst(line, label)
+                # self.insts.insert_insts(inst)
+                func.insts.insert_insts(inst)
+                if label is not None:
+                    label = None
+            else:
+                label = line[:-1]
+                continue
+

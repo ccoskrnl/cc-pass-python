@@ -30,6 +30,8 @@ class Op(Enum):
     ENTRY = auto()
     EXIT = auto()
 
+    FUNCTION_DEF = auto()
+
     UNKNOWN = auto()
 
 Arithmetic_Op = {

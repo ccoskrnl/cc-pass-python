@@ -1,22 +1,19 @@
 from typing import Optional
 
 from cof.analysis.loop import LoopAnalyzer
-from cof.base.mir.inst import MIRInsts
-from cof.base.ssa import SSAEdgeBuilder
 from cof.base.cfg import ControlFlowGraph
+from cof.base.ssa import SSAEdgeBuilder
 from cof.early import EarlyOptimizer
 
 
 class LocalCodeOptimizer:
-    def __init__(self, **kwargs):
-        self.insts: MIRInsts = kwargs['insts']
-        self.cfg: Optional[ControlFlowGraph] = None
+    def __init__(self, cfg: ControlFlowGraph):
+        self.cfg: Optional[ControlFlowGraph] = cfg
         self.loop_analyzer: Optional[LoopAnalyzer] = None
         self.ssa_edge_builder: Optional[SSAEdgeBuilder] = None
 
     def initialize(self):
         # control flow graph
-        self.cfg = ControlFlowGraph(self.insts)
         self.cfg.initialize()
 
         # print(self.cfg.edges)

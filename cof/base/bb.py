@@ -69,7 +69,7 @@ class BasicBlock:
         start_addr = -1
         for inst in self.insts.ret_insts():
             if not inst.is_phi():
-                start_addr = inst.addr
+                start_addr = inst.offset
                 break
 
         return "B" + str(self.id) + "[addr " + str(start_addr) + "]"

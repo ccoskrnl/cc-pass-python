@@ -110,7 +110,7 @@ class CFGVisualizer(QMainWindow):
 
         # visualize edge
         for block in self.blocks.values():
-            for succ in block.succ_vbbs:
+            for succ in block.succ_vbb_s:
                 self.create_edge(block, succ)
 
     def visualize_tree(self, node: Tree):
@@ -144,9 +144,9 @@ class CFGVisualizer(QMainWindow):
         visual_basic_block: VisualBasicBlock
         for visual_basic_block in self.blocks.values():
             for bb_id in visual_basic_block.succ_bbs:
-                visual_basic_block.succ_vbbs.append(self.blocks[bb_id])
+                visual_basic_block.succ_vbb_s.append(self.blocks[bb_id])
             for bb_id in visual_basic_block.pred_bbs:
-                visual_basic_block.pred_vbbs.append(self.blocks[bb_id])
+                visual_basic_block.pred_vbb_s.append(self.blocks[bb_id])
 
     def testing(self, width, height, x, y):
         entry: VisualBasicBlock = self.entry_block

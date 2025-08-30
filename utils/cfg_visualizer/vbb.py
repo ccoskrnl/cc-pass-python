@@ -1,5 +1,4 @@
 import math
-from random import randint
 
 from PyQt6.QtCore import Qt, QPointF, QRectF, QEvent
 from PyQt6.QtGui import QBrush, QPen, QColor, QTextCursor, QAction, QLinearGradient, QPainterPath, QGradient
@@ -47,19 +46,19 @@ class VisualBasicBlock(BasicBlock):
 
         self.color = None
 
-        self.succ_vbbs: list[VisualBasicBlock] = []
-        self.pred_vbbs: list[VisualBasicBlock] = []
+        self.succ_vbb_s: list[VisualBasicBlock] = []
+        self.pred_vbb_s: list[VisualBasicBlock] = []
 
         # A dict, key is vbb that be moved, value is corresponding edge.
         self.edge_dict = { }
 
     def build_content(self):
         last_inst: MIRInst = self.insts.ret_inst_by_idx(-1)
-        addr_width_max = len(str(last_inst.addr))
+        addr_width_max = len(str(last_inst.offset))
         for phi_inst in self.insts.ret_phi_insts():
             self.content += " " * (addr_width_max + 2) + str(phi_inst) + "\n"
         for ord_inst in self.insts.ret_ordinary_insts():
-            self.content += f"{ord_inst.addr:>{addr_width_max}}: {str(ord_inst)}\n"
+            self.content += f"{ord_inst.offset:>{addr_width_max}}: {str(ord_inst)}\n"
 
 
 class EdgeItem(QGraphicsPathItem):
@@ -150,66 +149,68 @@ class EdgeItem(QGraphicsPathItem):
 
 
         # 计算控制点
-        horizontal_offset = min(200, abs(start_pos.x() - end_pos.x()) * 0.3)
-        vertical_offset = min(150, abs(start_pos.y() - end_pos.y()) * 0.5)
+        horizontal_offset = min(200, int(abs(start_pos.x() - end_pos.x()) * 0.3))
+        vertical_offset = min(150, int(abs(start_pos.y() - end_pos.y()) * 0.5))
 
 
         # 创建曲线路径
         path = QPainterPath()
         path.moveTo(start_pos)
 
-        if self.connection_type == EdgeType.tree:
-            ctrl1 = QPointF(start_pos_x, start_pos_y + vertical_offset)
-            ctrl2 = QPointF(end_pos_x, end_pos_y - vertical_offset)
-            path.cubicTo(ctrl1, ctrl2, end_pos)
-        elif self.connection_type == EdgeType.back:
-            control_offset = 300
-            if start_pos_x < end_pos_x:
-                control1 = QPointF(
-                    start_pos_x + control_offset + horizontal_offset
-                    , start_pos_y + vertical_offset)
-                control2 = QPointF(
-                    end_pos_x - control_offset - horizontal_offset
-                    , end_pos_y - vertical_offset)
-            else:
-                control1 = QPointF(
-                    start_pos_x - control_offset - horizontal_offset
-                    , start_pos_y + vertical_offset)
-                control2 = QPointF(
-                    end_pos_x + control_offset + horizontal_offset
-                    , end_pos_y - vertical_offset)
+        match self.connection_type:
+            case EdgeType.tree:
+                ctrl1 = QPointF(start_pos_x, start_pos_y + vertical_offset)
+                ctrl2 = QPointF(end_pos_x, end_pos_y - vertical_offset)
+                path.cubicTo(ctrl1, ctrl2, end_pos)
+            case EdgeType.back:
+                control_offset = 300
+                if start_pos_x < end_pos_x:
+                    control1 = QPointF(
+                        start_pos_x + control_offset + horizontal_offset
+                        , start_pos_y + vertical_offset)
+                    control2 = QPointF(
+                        end_pos_x - control_offset - horizontal_offset
+                        , end_pos_y - vertical_offset)
+                else:
+                    control1 = QPointF(
+                        start_pos_x - control_offset - horizontal_offset
+                        , start_pos_y + vertical_offset)
+                    control2 = QPointF(
+                        end_pos_x + control_offset + horizontal_offset
+                        , end_pos_y - vertical_offset)
 
-            path.cubicTo(control1, control2, end_pos)
+                path.cubicTo(control1, control2, end_pos)
 
-            arrow_base = control2
-        elif self.connection_type == EdgeType.forward:
+                arrow_base = control2
+            case EdgeType.forward:
 
-            offset_x = (end_pos_x - start_pos_x) * 0.3
-            offset_y = abs(end_pos_y - start_pos_y) * 0.5
+                offset_x = (end_pos_x - start_pos_x) * 0.3
+                offset_y = abs(end_pos_y - start_pos_y) * 0.5
 
-            path.cubicTo(
-                start_pos_x + offset_x, start_pos_y + offset_y,
-                end_pos_x - offset_x, end_pos_y - offset_y,
-                end_pos_x, end_pos_y
-            )
-        elif self.connection_type == EdgeType.cross:
+                path.cubicTo(
+                    start_pos_x + offset_x, start_pos_y + offset_y,
+                    end_pos_x - offset_x, end_pos_y - offset_y,
+                    end_pos_x, end_pos_y
+                )
+            case EdgeType.cross:
+                path.lineTo(start_pos_x, start_pos_y + 40)
 
-            path.lineTo(start_pos_x, start_pos_y + 40)
+                if self.source.id == self.target.id:
+                    path.lineTo(self.source.x - 20, start_pos_y + 40)
+                    path.lineTo(self.source.x - 20, self.source.y - 20)
+                    path.lineTo(start_pos_x, self.source.y - 20)
+                else:
 
-            if self.source.id == self.target.id:
-                path.lineTo(self.source.x - 20, start_pos_y + 40)
-                path.lineTo(self.source.x - 20, self.source.y - 20)
-                path.lineTo(start_pos_x, self.source.y - 20)
-            else:
+                    # 计算偏移量（避免重叠）
+                    offset = (end_pos_x - (start_pos_x + self.source.width)) / 2
 
-                # 计算偏移量（避免重叠）
-                offset = (end_pos_x - (start_pos_x + self.source.width)) / 2
+                    path.lineTo(end_pos_x - offset - (self.target.width / 2), start_pos_y + 40)
+                    path.lineTo(end_pos_x - offset - (self.target.width / 2), end_pos_y - 20)
+                    path.lineTo(end_pos_x, end_pos_y - 20)
 
-                path.lineTo(end_pos_x - offset - (self.target.width / 2), start_pos_y + 40)
-                path.lineTo(end_pos_x - offset - (self.target.width / 2), end_pos_y - 20)
-                path.lineTo(end_pos_x, end_pos_y - 20)
+                path.lineTo(end_pos_x, end_pos_y)
 
-            path.lineTo(end_pos_x, end_pos_y)
+
 
         self.setPath(path)
 
@@ -560,7 +561,7 @@ class BlockItem(QGraphicsItem):
         for edge_item in self.block.edge_dict.values():
             edge_item.update_path()
         # incident edge
-        for pred_vbb in self.block.pred_vbbs:
+        for pred_vbb in self.block.pred_vbb_s:
             if self.block.id in pred_vbb.edge_dict:
                 incident_edge = pred_vbb.edge_dict[self.block.id]
                 incident_edge.update_path()

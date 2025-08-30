@@ -45,6 +45,10 @@ OP_PATTERN = re.compile(r'^[+\-*/=<>!&|^%:]+$')
 # parenthesis
 PARENTHESIS_PATTERN = re.compile(r'^[()]$')
 
+# function def
+FUNCTION_DEF_PATTERN = r'\$function\s+(\w+)\s*\(\s*([^)]*?)\s*\)\s*'
+FUNCTION_END_PATTERN = r'\$end\s*function\s*'
+
 OP_MAP = {
     ":=": Op.ASSIGN,
     "=": Op.EQ,

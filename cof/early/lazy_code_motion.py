@@ -365,7 +365,7 @@ def lazy_code_motion_optimize(cfg: ControlFlowGraph):
     # For all blocks $B$ such that $x + y$ is in $latest[B] \cap used[B].out$,
     # add $t = x + y$ at the beginning of B.
 
-    blocks_exclude_entry = set(blocks) - {cfg.entry_block()}
+    blocks_exclude_entry = set(blocks) - {cfg.entry_block(), cfg.exit_block()}
 
     for block in blocks_exclude_entry:
         if block in latest_sets and latest_sets[block]:
@@ -373,13 +373,13 @@ def lazy_code_motion_optimize(cfg: ControlFlowGraph):
             for expr in latest_sets[block]:
                 tv = temp_vars[expr]
                 new_mir_inst = MIRInst(
-                    addr=-1,
+                    offset=-1,
                     operand1=deepcopy(expr.operand1),
                     operand2=deepcopy(expr.operand2),
                     op=expr.op,
                     result=Operand(OperandType.VAR, Variable(tv))
                 )
-                block.insts.insert_insts(index=0, insts=new_mir_inst)
+                block.insts.insert_insts(insts=new_mir_inst, index=0)
                 insert_index = cfg.insts.index_for_inst(block.first_ordinary_inst)
                 cfg.add_new_inst(insert_index, new_mir_inst)
 
@@ -412,5 +412,6 @@ def lazy_code_motion_optimize(cfg: ControlFlowGraph):
                     convert_bin_expr_to_operand(
                         statement,
                         Operand(OperandType.VAR, Variable(tv)))
+                    break
 
     cfg.reassign_inst_id()

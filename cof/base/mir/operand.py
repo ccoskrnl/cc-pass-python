@@ -15,6 +15,7 @@ class OperandType(Enum):
     PTR = auto()
 
     ARGS = auto()
+    FUNCTION = auto()
 
     UNKNOWN = auto()
 
@@ -29,6 +30,7 @@ Operand_Type_Str_Map = {
     OperandType.PTR: "ptr",
     OperandType.ARGS: "args",
     OperandType.UNKNOWN: "unknown",
+    OperandType.FUNCTION: "function"
 }
 
 Const_Operand_Type = {
@@ -85,14 +87,19 @@ class Operand:
     def __hash__(self):
         return hash((self.type, self.value))
 
-    # ++++++++ repr ++++++++
+    # ++++++++ str ++++++++
+
     def __repr__(self):
+        return f"[{Operand_Type_Str_Map[self.type]}]{str(self)}"
+
+    def __str__(self):
         formatter = {
             OperandType.PTR: self._format_addr,
         }.get(self.type, self._format_const)
         return formatter()
     def _format_addr(self):
-        return f"addr-{self.value}"
+        from cof.base.mir.inst import MIRInsts
+        return f"addr-{MIRInsts.insts_dict_by_id[self.value].addr}"
     def _format_const(self):
         return str(self.value)
     def _val(self, operand: 'Operand'):

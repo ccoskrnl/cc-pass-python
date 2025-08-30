@@ -1,7 +1,6 @@
 import random
 from abc import ABC, abstractmethod
 from collections import deque, defaultdict
-from pathlib import Path
 from typing import Tuple, Optional, Dict, List, Union
 
 from cof.base.bb import BasicBlock, BasicBlockId, BasicBlockBranchType, BranchType
@@ -36,9 +35,9 @@ class ControlFlowGraphABC(ABC):
     def block(self, block_id: BasicBlockId) -> BasicBlock:
         pass
 
-    @abstractmethod
-    def inst(self, inst_addr: MIRInstAddr) -> MIRInst:
-        pass
+    # @abstractmethod
+    # def inst(self, inst_addr: MIRInstAddr) -> MIRInst:
+    #     pass
 
     @abstractmethod
     def all_blocks(self) -> List[BasicBlock]:
@@ -65,10 +64,8 @@ class ControlFlowGraph(ControlFlowGraphForDataFlowAnalysis):
         # Instruction List
         self.insts: MIRInsts = insts
 
-        self.insts_dict_by_id: Dict[MIRInstId, MIRInst] = { }
-        self.insts_dict_by_addr: Dict[MIRInstAddr, MIRInst] = { }
+        # self.insts_dict_by_id: Dict[MIRInstId, MIRInst] = { }
         self.block_by_inst_id: Dict[MIRInstId, BasicBlock] = { }
-        self.block_by_inst_addr: Dict[MIRInstAddr, BasicBlock] = { }
 
         # The root of the cfg
         self.root: Optional[BasicBlock, None] = None
@@ -115,23 +112,24 @@ class ControlFlowGraph(ControlFlowGraphForDataFlowAnalysis):
 
         for inst in self.insts.ret_insts():
 
-            self.insts_dict_by_addr[inst.addr] = inst
+            # self.insts_dict_by_offset[inst.offset] = inst
+
 
             match inst.op:
                 case Op.ENTRY:
-                    leaders_set_by_addr.add(inst.addr)
+                    leaders_set_by_addr.add(inst.offset)
                     offset = 1
                     for instruction in self.insts.ret_insts()[1:]:
                         if instruction.is_init():
                             offset += 1
                         else:
                             break
-                    leaders_set_by_addr.add(inst.addr + offset)
+                    leaders_set_by_addr.add(inst.offset + offset)
                 case Op.EXIT:
-                    leaders_set_by_addr.add(inst.addr)
+                    leaders_set_by_addr.add(inst.offset)
 
                 case Op.IF:
-                    leaders_set_by_addr.add(inst.addr + 1)
+                    leaders_set_by_addr.add(inst.offset + 1)
                     assert inst.result.type == OperandType.PTR
                     target = int(inst.result.value)
                     leaders_set_by_addr.add(target)
@@ -159,29 +157,33 @@ class ControlFlowGraph(ControlFlowGraphForDataFlowAnalysis):
             found_inst = self.insts.find_inst_by_key(key="addr", value=i)
             if found_inst:
                 block_insts.append(found_inst)
-        self.exit = self.new_a_block(self.n_bbs, block_insts)
+        # self.exit = self.new_a_block(self.n_bbs, block_insts)
 
         self.root = self.block_by_id[0]
 
         # Updating Edges in the CFG
-        for src_vertex in self.block_by_id.values():
+        for src_vertex in set(self.block_by_id.values()) - {self.exit}:
 
             # Get the last inst in basic block.
             last_inst = src_vertex.insts.ret_inst_by_idx(-1)
-            last_inst_idx = last_inst.addr
+            last_inst_idx = last_inst.offset
 
             # Handling GOTO statement
             if last_inst.op == Op.GOTO:
-                target_inst_idx = int(last_inst.result.value)
+                # target_inst_idx = int(last_inst.result.value)
+
+                # The value of result of branch instruction is instruction unique id.
+                # Get the GOTO target instruction unique id.
+                target_inst_uid = last_inst.result.value
+
+                # anticipated vertex
                 dst_vertex = None
+
+                # iterate all blocks
                 for target_bb in self.block_by_id.values():
-                    if target_bb.insts.inst_exist_by_key(key="addr", value=target_inst_idx):
+                    if target_bb.insts.inst_by_id(target_inst_uid):
                         dst_vertex = target_bb
                         break
-                # dst_vertex = next((target_bb \
-                #                for target_bb in self.blocks.values() \
-                #                if target_bb.insts.inst_exist_by_key(key="addr", value=target_inst_idx)))
-                #                     # if target_bb.insts.inst_exist_by_addr(target_inst_idx)))
 
                 # record the next bb
                 src_vertex.branch_type = BasicBlockBranchType.jump
@@ -193,31 +195,54 @@ class ControlFlowGraph(ControlFlowGraphForDataFlowAnalysis):
             else:
 
                 # Handle IF
+                # The value of result of branch instruction is instruction unique id.
+                # Get the IF target instruction unique id.
                 if last_inst.op == Op.IF:
-                    target_inst_idx = int(last_inst.result.value)
-                    dst_vertex = next((target_bb \
-                                       for target_bb in self.block_by_id.values() \
-                                       if target_bb.insts.inst_exist_by_key(key="addr", value=target_inst_idx)))
-                                        # if target_bb.insts.inst_exist_by_addr(target_inst_idx)))
+                    target_inst_uid = int(last_inst.result.value)
+
+                    # dst_vertex = next((target_bb \
+                    #                    for target_bb in self.block_by_id.values() \
+                    #                    if target_bb.insts.inst_by_id(target_inst_uid)), -1)
+
+                    # anticipated vertex
+                    dst_vertex = None
+
+                    # iterate all blocks
+                    for target_bb in self.block_by_id.values():
+                        if target_bb.insts.inst_by_id(target_inst_uid):
+                            dst_vertex = target_bb
+                            break
 
                     src_vertex.branch_type = BasicBlockBranchType.cond
                     src_vertex.ordered_succ_bbs.append(dst_vertex.id)
+
                     self.edges.append((src_vertex.id, dst_vertex.id))
                     self.exec_flow[(src_vertex.id, dst_vertex.id)] = BranchType.TRUE
                 else:
                     src_vertex.branch_type = BasicBlockBranchType.jump
 
-                dst_vertex = next((target_bb \
-                                   for target_bb in self.block_by_id.values() \
-                                   if target_bb.insts.inst_exist(lambda ins: ins.addr == (last_inst_idx + 1))), -1)
+                # dst_vertex = next((target_bb \
+                #                    for target_bb in self.block_by_id.values() \
+                #                    if target_bb.insts.inst_exist(lambda ins: ins.offset == (last_inst_idx + 1))), -1)
 
-                if dst_vertex != -1:
-                    src_vertex.ordered_succ_bbs.append(dst_vertex.id)
-                    self.edges.append((src_vertex.id, dst_vertex.id))
-                    if last_inst.op == Op.IF:
-                        self.exec_flow[(src_vertex.id, dst_vertex.id)] = BranchType.FALSE
-                    else:
-                        self.exec_flow[(src_vertex.id, dst_vertex.id)] = BranchType.UN_COND
+                # anticipated vertex
+                dst_vertex = None
+
+                # iterate all blocks
+                for target_bb in self.block_by_id.values():
+                    if target_bb.insts.inst_exist(lambda instr: instr.offset == (last_inst_idx + 1)):
+                        dst_vertex = target_bb
+                        break
+
+                assert dst_vertex is not None
+
+                # if dst_vertex:
+                src_vertex.ordered_succ_bbs.append(dst_vertex.id)
+                self.edges.append((src_vertex.id, dst_vertex.id))
+                if last_inst.op == Op.IF:
+                    self.exec_flow[(src_vertex.id, dst_vertex.id)] = BranchType.FALSE
+                else:
+                    self.exec_flow[(src_vertex.id, dst_vertex.id)] = BranchType.UN_COND
 
 
         for (src_id, dst_id) in self.edges:
@@ -336,8 +361,8 @@ class ControlFlowGraph(ControlFlowGraphForDataFlowAnalysis):
     def block(self, block_id: BasicBlockId) -> BasicBlock:
         return self.block_by_id[block_id]
 
-    def inst(self, inst_addr: MIRInstAddr) -> MIRInst:
-        return self.insts_dict_by_addr[inst_addr]
+    # def inst(self, inst_addr: MIRInstAddr) -> MIRInst:
+    #     return self.insts_dict_by_offset[inst_addr]
 
     def all_blocks(self) -> List[BasicBlock]:
         return list(self.block_by_id.values())
@@ -405,7 +430,8 @@ class ControlFlowGraph(ControlFlowGraphForDataFlowAnalysis):
                         new_tmp[n] -= {t}
 
         for n in self.block_id_set - {root_id}:
-            self.idom[n] = random.choice(list(new_tmp[n]))
+            if new_tmp[n]:
+                self.idom[n] = random.choice(list(new_tmp[n]))
 
     def construct_dominator_tree(self):
         for child, parent in self.idom.items():
@@ -455,12 +481,12 @@ class ControlFlowGraph(ControlFlowGraphForDataFlowAnalysis):
         def_dict = defaultdict(list)
         for inst in self.insts.ret_ordinary_insts():
 
-            block = self.block_by_inst_addr.get(inst.addr, None)
+            block = self.block_by_inst_id.get(inst.unique_id, None)
             if not block:
                 continue
 
             if inst.is_assignment():
-                def_dict[block].append((inst.ret_dest_variable().value, inst.addr))
+                def_dict[block].append((inst.ret_dest_variable().value, inst.offset))
 
         return def_dict
 
@@ -509,16 +535,6 @@ class ControlFlowGraph(ControlFlowGraphForDataFlowAnalysis):
     def collect_exprs(self) -> set[Expression]:
         all_exprs = set()
 
-        # def is_not_exist(e: Expression) -> bool:
-        #     nonlocal all_exprs
-        #     for expression in all_exprs:
-        #         if e.op == expression.op \
-        #             and e.operands[0] == expression.operands[0] \
-        #             and e.operands[1] == expression.operands[1]:
-        #             return False
-        #
-        #     return True
-
 
         for inst in self.insts.ret_insts():
             expr = ret_expr_from_mir_inst(inst)
@@ -527,12 +543,6 @@ class ControlFlowGraph(ControlFlowGraphForDataFlowAnalysis):
                 all_exprs.add(expr)
 
         return all_exprs
-
-        # return {
-        #     ret_expr_from_mir_inst(inst)
-        #     for inst in self.insts.ret_insts()
-        #     if ret_expr_from_mir_inst(inst) is not None
-        # }
 
 
     # ++++++++ SSA ++++++++
@@ -839,12 +849,12 @@ class ControlFlowGraph(ControlFlowGraphForDataFlowAnalysis):
             for inst in block.insts.ret_ordinary_insts():
                 if inst.is_assignment():
                     var: SSAVariable = inst.result.value
-                    def_sites[str(var)] = inst.id
+                    def_sites[str(var)] = inst.unique_id
 
             for phi_inst in block.insts.ret_phi_insts():
                 var: SSAVariable = phi_inst.result.value
-                def_sites[str(var)] = phi_inst.id
-                phi_sources[phi_inst.id] = []
+                def_sites[str(var)] = phi_inst.unique_id
+                phi_sources[phi_inst.unique_id] = []
 
         # stage 2.
         # connect common use.
@@ -855,7 +865,7 @@ class ControlFlowGraph(ControlFlowGraphForDataFlowAnalysis):
                     if isinstance(operand.value, SSAVariable) and str(operand.value) in def_sites:
                         src_inst_id = def_sites[str(operand.value)]
                         edges.append(SSAEdge(
-                            self.insts_dict_by_id[src_inst_id]
+                            self.insts.inst_by_id(src_inst_id)
                             , inst
                             , self.find_defining_block(src_inst_id)
                             , block
@@ -880,7 +890,7 @@ class ControlFlowGraph(ControlFlowGraphForDataFlowAnalysis):
                         if src_block and src_block.id in predecessor_id_list:
 
                             ssa_edge = SSAEdge(
-                                self.insts_dict_by_id[src_inst_id]
+                                self.insts.inst_by_id(src_inst_id)
                                 , phi
                                 , self.find_defining_block(src_inst_id)
                                 , block
@@ -896,16 +906,13 @@ class ControlFlowGraph(ControlFlowGraphForDataFlowAnalysis):
     # ++++++++ Management ++++++++
     def reassign_inst_id(self):
         for i, inst in enumerate(self.insts.ret_insts()):
-            inst.id = i
-            inst.addr = i
+            inst.offset = i
 
-        self.insts_dict_by_id = {inst.id: inst for inst in self.insts.ret_insts()}
+        # self.insts_dict_by_id = {inst.unique_id: inst for inst in self.insts.ret_insts()}
 
         for block in self.block_by_id.values():
             for inst in block.insts.ret_insts():
-                self.block_by_inst_id[inst.id] = block
-                if not inst.is_phi():
-                    self.block_by_inst_addr[inst.addr] = block
+                self.block_by_inst_id[inst.unique_id] = block
 
     def new_a_block(self, bb_id: BasicBlockId, block_insts: List[MIRInst]) -> BasicBlock:
         src_vertex = BasicBlock(bb_id, block_insts)
@@ -914,15 +921,17 @@ class ControlFlowGraph(ControlFlowGraphForDataFlowAnalysis):
         self.block_id_set.add(bb_id)
         self.n_bbs += 1
 
+        for instr in block_insts:
+            if instr.op == Op.EXIT:
+                self.exit = src_vertex
+
         return src_vertex
 
     def find_defining_block(self, inst: Union[MIRInstId, MIRInst]) -> Optional[BasicBlock]:
         if isinstance(inst, int):
             return self.block_by_inst_id[inst]
         elif isinstance(inst, MIRInst):
-            return self.block_by_inst_id[inst.id]
-        else:
-            return None
+            return self.block_by_inst_id[inst.unique_id]
 
     def add_new_inst(self, index: int, inst: MIRInst):
         """
@@ -932,7 +941,7 @@ class ControlFlowGraph(ControlFlowGraphForDataFlowAnalysis):
             add the inst to the corresponding basic block.
 
         """
-        self.insts.insert_insts(index, inst)
+        self.insts.insert_insts(inst, index)
 
     def print_dom_tree(self, block: BasicBlock):
         print(", ".join(map(str, block.dominator_tree_children_id)) + '\t\t\t')
@@ -947,18 +956,6 @@ class ControlFlowGraph(ControlFlowGraphForDataFlowAnalysis):
 
         self._dom_front()
         self._df_plus(self.block_id_set)
-
-
-    # ++++++++ Output ++++++++
-    def output_mir(self, output_file):
-
-        output_path = Path(output_file)
-        output_dir = output_path.parent
-        if output_dir and not output_dir.exists():
-            output_dir.mkdir(parents=True, exist_ok=True)
-
-        with open(output_file, mode='w', encoding='utf-8') as file:
-            file.write(str(self.insts))
 
 
 
@@ -1014,8 +1011,8 @@ class FlattenBasicBlocks:
             # handle the current block
             for idx, inst in enumerate(insts[:-1]):
                 idx += 1
-                self.succ[inst.id].append(insts[idx].id)
-                edge = (inst.id, insts[idx].id)
+                self.succ[inst.unique_id].append(insts[idx].unique_id)
+                edge = (inst.unique_id, insts[idx].unique_id)
                 self.edges.append(edge)
 
             # handle the successors of the block
@@ -1025,14 +1022,14 @@ class FlattenBasicBlocks:
                 succ_block = self.cfg.block_by_id[b_id]
 
                 # the false branch address is the address of the current instruction plus one.
-                next_inst_of_false_branch = succ_block.insts.find_inst_by_key(key="addr", value=last_inst.addr + 1)
+                next_inst_of_false_branch = succ_block.insts.find_inst_by_key(key="addr", value=last_inst.offset + 1)
                 if next_inst_of_false_branch:
                     find_false_branch = True
 
                 next_inst_of_true_branch = succ_block.insts.ret_inst_by_idx(0)
-                self.succ[last_inst.id].append(next_inst_of_true_branch.id)
+                self.succ[last_inst.unique_id].append(next_inst_of_true_branch.unique_id)
 
-                edge = (last_inst.id, next_inst_of_true_branch.id)
+                edge = (last_inst.unique_id, next_inst_of_true_branch.unique_id)
                 self.edges.append(edge)
 
                 if last_inst.is_if():

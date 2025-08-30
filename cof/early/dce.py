@@ -16,7 +16,7 @@ def control_flow_dce(sccp_analyzer: SCCPAnalyzer) -> MIRInsts:
     for inst in original_inst:
         for succ_id in inst_succ[inst.id]:
             if exec_flow[(inst.id, succ_id)]:
-                dec_insts.insert_insts(None, inst)
+                dec_insts.insert_insts(inst, None)
 
-    dec_insts.insert_insts(None, original_inst[-1])
+    dec_insts.insert_insts(original_inst[-1], None)
     return dec_insts
