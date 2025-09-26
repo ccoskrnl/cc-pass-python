@@ -1,5 +1,6 @@
 from cof.analysis.sccp import SCCPAnalyzer
 from cof.base.mir.eval import mir_eval
+from cof.base.mir.inst import MIRInsts
 from cof.base.mir.operand import Operand
 from cof.base.semilattice import ConstLattice
 

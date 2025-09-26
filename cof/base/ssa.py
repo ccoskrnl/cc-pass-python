@@ -86,7 +86,7 @@ def create_phi_function(varname: str, num_pred_s: int) -> MIRInst:
         args.append(Operand(OperandType.SSA_VAR, SSAVariable(varname, None)))
 
     return MIRInst(
-        addr=-1,
+        offset=-1,
         op=Op.PHI,
         operand1=Operand(OperandType.VAR, Variable("φ")),
         operand2=Operand(OperandType.ARGS, Args(args)),

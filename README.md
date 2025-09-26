@@ -3,6 +3,13 @@
 **这并不是一个可用的工具，只是出于学习的目的**
 
 
+## 目录
+
+- [介绍](#介绍)
+- [特性](#特性)
+- [使用](#使用)
+- [路标](#路标)
+- [联系](#联系)
 
 ## 介绍
 
@@ -114,6 +121,119 @@ class DataFlowAnalysisFramework(Generic[T, B]):
 稀疏条件的常量传播（Sparse Conditional Constant Propagation，SCCP）是普通常量传播的增强版，结合了**常量传播**与**条件分支分析**，能更精确地处理控制流和稀疏数据流。框架首先通过迭代必经边界方法将流图转换为最小的SSA形式，并对基本块进行扁平化（或原子化），并使用流图的边和SSA边来传递信息实现程序的符号执行。
 
 
+## 使用
+```commandline
+$ python cc-pass.py --help                                                                                                               
+Usage: cc-pass.py [OPTIONS] COMMAND [ARGS]...
+
+  编译器优化通道工具集 (cc-pass.py)
+
+  一个专业的中间表示(IR)代码优化工具，提供多种优化算法和代码转换功能。 支持稀疏条件常量传播(SCCP)、部分冗余消除(PRE)等高级优化技术。
+
+  使用示例:   cc-pass.py optimize -i input.ir -o output.ir --sccp --pre=lcm
+  cc-pass.py analyze input.ir --format=json   cc-pass.py config config.json
+  --validate
+
+Options:
+  --help  Show this message and exit.
+
+Commands:
+  analyze   分析IR文件并显示统计信息。
+  optimize  对中间表示(IR)代码执行优化转换。
+```
+
+```commandline
+$ python cc-pass.py optimize --help                                                                                                      
+Usage: cc-pass.py optimize [OPTIONS]
+
+  对中间表示(IR)代码执行优化转换。
+
+  应用多种优化算法改进代码性能，包括常量传播、冗余消除等。 支持试运行模式，可在实际执行前预览优化效果。
+
+  优化算法:
+
+    SCCP       稀疏条件常量传播，通过稀疏分析技术传播常量
+
+    PRE        部分冗余消除算法:
+
+               lcm    - 懒惰代码移动算法
+
+               dae    - 死代码消除与表达式优化
+
+               cse    - 公共子表达式消除
+
+  SSA周期控制:
+
+    always     始终保持SSA形式
+
+    never      不转换为SSA形式
+
+    postpone   延迟SSA转换到必要时
+
+  示例:
+
+    $ cc-pass.py optimize -i input.ir -o output.ir --sccp
+
+    $ cc-pass.py optimize -i input.ir -o output.ir --sccp --pre=lcm
+
+    $ cc-pass.py optimize -i input.ir -o output.ir --sccp --pre=lcm --dry-run
+    -v
+
+Options:
+  --sccp                  启用稀疏条件常量传播优化。
+  --pre ALGORITHM         执行指定的部分冗余消除算法。可选: lcm, dae, cse。
+  --ssa-period PERIOD     控制SSA形式的更新时机。  [default: always]
+  -i, --input-file FILE   输入的IR文件路径。  [required]
+  -o, --output-file FILE  输出的IR文件路径。  [required]
+  -v, --verbose           显示详细处理信息和优化进度。
+  --dry-run               只显示将要执行的操作而不实际执行优化。
+  --help                  Show this message and exit.
+```
+
+```commandline
+$ python cc-pass.py analyze --help                                                                                                       
+Usage: cc-pass.py analyze [OPTIONS] IR_FILE FILE
+
+  分析IR文件并显示统计信息。
+
+  此命令提供IR代码的详细分析报告，包括函数数量、指令统计、 控制流复杂性等信息。支持多种输出格式便于后续处理。
+
+  分析内容:
+
+    - 基本文件信息（大小、函数数量）
+
+    - 指令类型统计分布
+
+    - 函数大小和复杂性指标
+
+    - 控制流图分析结果
+
+    - 单静态赋值形式 （可选）
+
+  输出格式说明:
+
+    text: 人类可读的文本格式（默认）
+
+    json: 结构化JSON格式，便于脚本处理（暂不支持）
+
+    xml:  XML格式，支持标准工具链（暂不支持）
+
+  示例:
+
+    # 基本文本分析
+
+    cc-pass.py analyze example.ir
+
+    # 详细分析报告
+
+    cc-pass.py analyze large_program.ir -f text
+
+Options:
+  --ssa-form                  转换为单静态赋值形式
+  -f, --report_format [text]  分析报告的输出格式。  [default: text]
+  -v, --verbose               显示更详细的分析信息。
+  --help                      Show this message and exit.
+```
 
 ## 路标
 
