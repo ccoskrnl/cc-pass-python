@@ -227,14 +227,14 @@ class MIRInst:
 
 class MIRInsts:
 
-    # global_insts_dict_by_id: Dict[MIRInstId, MIRInst] = { }
-    insts_dict_by_id: Dict[MIRInstId, MIRInst] = { }
+    global_insts_dict_by_id: Dict[MIRInstId, MIRInst] = { }
+    # insts_dict_by_id: Dict[MIRInstId, MIRInst] = { }
 
     def __init__(self, insts:Optional[List[MIRInst]]=None):
 
         self.ir_insts: List[MIRInst] = []
         self.num: int = 0
-        # self.insts_dict_by_id: Dict[MIRInstId, MIRInst] = { }
+        self.insts_dict_by_id: Dict[MIRInstId, MIRInst] = { }
         self.phi_insts_idx_end: int = 0
 
         self._initialize(insts)
@@ -245,6 +245,9 @@ class MIRInsts:
             self.insts_dict_by_id = {inst.unique_id: inst for inst in insts}
             self.num = len(insts)
 
+        for inst in self.ir_insts:
+            if inst.unique_id not in MIRInsts.global_insts_dict_by_id:
+                MIRInsts.global_insts_dict_by_id[inst.unique_id] = inst
 
     def __str__(self):
         return "\n".join(map(str, self.ir_insts))
@@ -300,6 +303,7 @@ class MIRInsts:
         self.ir_insts.insert(0, phi_inst)
         self.phi_insts_idx_end += 1
         self.insts_dict_by_id[phi_inst.unique_id] = phi_inst
+        MIRInsts.global_insts_dict_by_id[phi_inst.unique_id] = phi_inst
 
     def insert_insts(self, insts: Union[MIRInst, List[MIRInst]], index: Optional[int] = None) -> None:
 
@@ -309,6 +313,9 @@ class MIRInsts:
         if isinstance(insts, MIRInst):
             self.ir_insts.insert(index, insts)
             self.insts_dict_by_id[insts.unique_id] = insts
+
+            MIRInsts.global_insts_dict_by_id[insts.unique_id] = insts
+
             self.num += 1
 
         elif isinstance(insts, List) and all(isinstance(item, MIRInst) for item in insts):
@@ -316,6 +323,21 @@ class MIRInsts:
             self.num += len(insts)
             for i in insts:
                 self.insts_dict_by_id[i.unique_id] = i
+
+                MIRInsts.global_insts_dict_by_id[i.unique_id] = i
+
+    def remove_insts(self, insts: Union[MIRInst, List[MIRInst]]) -> None:
+        if isinstance(insts, MIRInst):
+            self.ir_insts.remove(insts)
+            self.insts_dict_by_id.pop(insts.unique_id)
+            MIRInsts.global_insts_dict_by_id.pop(insts.unique_id)
+
+        if isinstance(insts, List):
+            for inst in insts:
+                self.ir_insts.remove(inst)
+                self.insts_dict_by_id.pop(inst.unique_id)
+
+                MIRInsts.global_insts_dict_by_id.pop(inst.unique_id)
 
     def inst_by_id(self, inst_id: MIRInstId) -> Optional[MIRInst]:
         dest_inst = self.insts_dict_by_id.get(inst_id, None)

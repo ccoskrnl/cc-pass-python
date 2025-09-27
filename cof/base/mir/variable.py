@@ -6,6 +6,9 @@ class VariableScope(Enum):
     Local = auto()
 
 class Variable:
+
+    __slots__ = ('varname', 'scope', 'compiler_generated')
+
     def __init__(
             self,
             varname: str,
@@ -15,6 +18,10 @@ class Variable:
         self.varname: str = varname
         self.scope: VariableScope = scope
         self.compiler_generated: bool = compiler_generated
+
+    @property
+    def base_name(self) -> str:
+        return self.varname
 
     def __repr__(self):
         return self.varname

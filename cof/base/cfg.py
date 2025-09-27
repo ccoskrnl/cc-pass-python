@@ -131,12 +131,12 @@ class ControlFlowGraph(ControlFlowGraphForDataFlowAnalysis):
                 case Op.IF:
                     leaders_set_by_addr.add(inst.offset + 1)
                     assert inst.result.type == OperandType.PTR
-                    target = int(inst.result.value)
+                    target = MIRInsts.global_insts_dict_by_id[inst.result.value].offset
                     leaders_set_by_addr.add(target)
 
                 case Op.GOTO:
                     assert inst.result.type == OperandType.PTR
-                    target = int(inst.result.value)
+                    target = MIRInsts.global_insts_dict_by_id[inst.result.value].offset
                     leaders_set_by_addr.add(target)
 
 
@@ -145,20 +145,16 @@ class ControlFlowGraph(ControlFlowGraphForDataFlowAnalysis):
         for leader_idx in range(0, len(sorted_list) - 1):
             block_insts: List[MIRInst] = []
             for i in range(sorted_list[leader_idx], sorted_list[leader_idx+1]):
-                found_inst = self.insts.find_inst_by_key(key="addr", value=i)
+                found_inst = self.insts.find_inst_by_key(key="offset", value=i)
                 if found_inst:
                     block_insts.append(found_inst)
 
             self.new_a_block(self.n_bbs, block_insts)
 
         # Construct the exit basic block
-        block_insts: List[MIRInst] = []
-        for i in range(sorted_list[-1], self.insts.num):
-            found_inst = self.insts.find_inst_by_key(key="addr", value=i)
-            if found_inst:
-                block_insts.append(found_inst)
-        # self.exit = self.new_a_block(self.n_bbs, block_insts)
+        block_insts: List[MIRInst] = [self.insts.find_inst_by_key(key="offset", value=sorted_list[-1])]
 
+        self.exit = self.new_a_block(self.n_bbs, block_insts)
         self.root = self.block_by_id[0]
 
         # Updating Edges in the CFG
@@ -166,7 +162,6 @@ class ControlFlowGraph(ControlFlowGraphForDataFlowAnalysis):
 
             # Get the last inst in basic block.
             last_inst = src_vertex.insts.ret_inst_by_idx(-1)
-            last_inst_idx = last_inst.offset
 
             # Handling GOTO statement
             if last_inst.op == Op.GOTO:
@@ -230,7 +225,7 @@ class ControlFlowGraph(ControlFlowGraphForDataFlowAnalysis):
 
                 # iterate all blocks
                 for target_bb in self.block_by_id.values():
-                    if target_bb.insts.inst_exist(lambda instr: instr.offset == (last_inst_idx + 1)):
+                    if target_bb.insts.inst_exist(lambda instr: instr.offset == (last_inst.offset + 1)):
                         dst_vertex = target_bb
                         break
 
@@ -932,6 +927,7 @@ class ControlFlowGraph(ControlFlowGraphForDataFlowAnalysis):
             return self.block_by_inst_id[inst]
         elif isinstance(inst, MIRInst):
             return self.block_by_inst_id[inst.unique_id]
+        return None
 
     def add_new_inst(self, index: int, inst: MIRInst):
         """

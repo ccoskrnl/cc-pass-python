@@ -31,7 +31,7 @@ class SCCPAnalyzer:
         self.fatten_blocks.flatten_blocks()
 
     def initialize(self):
-        first_inst_id = self.cfg.insts.ret_inst_by_idx(0).id
+        first_inst_id = self.cfg.insts.ret_inst_by_idx(0).unique_id
         self.flow_wl.append((first_inst_id, self.flow_succ(first_inst_id)[0]))
 
         for p in self.fatten_blocks.edges:
@@ -109,7 +109,7 @@ class SCCPAnalyzer:
         return i
 
     def inst(self, mir_id: MIRInstId) -> MIRInst:
-        return self.cfg.insts_dict_by_id[mir_id]
+        return self.cfg.insts.insts_dict_by_id[mir_id]
 
     def get_insts(self) -> MIRInsts:
         return self.cfg.insts
@@ -170,10 +170,10 @@ class SCCPAnalyzer:
         if new_value != self.lat_cell[str(inst.result.value)]:
             self.lat_cell[str(inst.result.value)] ^= new_value
 
-            for succ_id in self.flow_succ(inst.id):
-                self.flow_wl.append((inst.id, succ_id))
-            for user in self.ssa_succ(inst.id):
-                self.ssa_wl.append((inst.id, user))
+            for succ_id in self.flow_succ(inst.unique_id):
+                self.flow_wl.append((inst.unique_id, succ_id))
+            for user in self.ssa_succ(inst.unique_id):
+                self.ssa_wl.append((inst.unique_id, user))
 
 
     def visit_inst(self, k: MIRInstId, inst: MIRInst, exec_flow: Dict[Tuple[MIRInstId, MIRInstId], bool]):
@@ -197,8 +197,8 @@ class SCCPAnalyzer:
         if val != self.lat_cell[target]:
             self.lat_cell[target] ^= val
 
-            for succ_id in self.ssa_succ(inst.id):
-                self.ssa_wl.append((inst.id, succ_id))
+            for succ_id in self.ssa_succ(inst.unique_id):
+                self.ssa_wl.append((inst.unique_id, succ_id))
 
 
         k_succ_edges_set = self.flow_succ_edge(k)

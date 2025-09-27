@@ -1,6 +1,6 @@
 from cof.base.mir.operand import Operand_Type_Str_Map, OperandType, Operand
 
-from cof.base.mir.operator import Op
+from cof.base.mir.operator import Op, Bool_Op
 
 
 def mir_eval(op: Op, operand1: Operand, operand2: Operand) -> Operand:

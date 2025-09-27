@@ -132,7 +132,7 @@ class ConstLattice(Semilattice['ConstLattice']):
         if other.is_top:
             return copy(self)
 
-        if self.is_constant and self.is_constant:
+        if self.is_constant and other.is_constant:
             if self.value != other.value:
                 return ConstLattice.bottom()
 
@@ -146,7 +146,7 @@ class ConstLattice(Semilattice['ConstLattice']):
         if self.is_top:
             self.copy(other)
 
-        if self.is_constant and self.is_constant:
+        if self.is_constant and other.is_constant:
             if self.value != other.value:
                 self.set_bottom()
 

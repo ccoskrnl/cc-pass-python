@@ -1,6 +1,7 @@
 from enum import Enum, auto
 
 
+
 class OperandType(Enum):
     VOID = auto()
 
@@ -47,7 +48,7 @@ class Type:
     def __repr__(self):
         return self.name
     def __eq__(self, other):
-        self.name = other.name
+        self.name = other.varname
 
     def is_void(self):
         return True if self.name == OperandType.VOID else False
@@ -99,7 +100,7 @@ class Operand:
         return formatter()
     def _format_addr(self):
         from cof.base.mir.inst import MIRInsts
-        return f"addr-{MIRInsts.insts_dict_by_id[self.value].addr}"
+        return f"addr-{MIRInsts.global_insts_dict_by_id[self.value].addr}"
     def _format_const(self):
         return str(self.value)
     def _val(self, operand: 'Operand'):
@@ -121,4 +122,3 @@ class Operand:
     # ++++++++ value ++++++++
     def is_true(self) -> bool:
         return False if self.type == OperandType.BOOL and self.value == False else True
-

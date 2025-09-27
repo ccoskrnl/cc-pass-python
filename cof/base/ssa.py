@@ -9,18 +9,18 @@ from cof.base.mir.variable import Variable
 
 
 class SSAVariable:
-    __slots__ = ('name', 'version')
+    __slots__ = ('varname','version')
 
     def __init__(self, var: Union[str, Variable], version: Optional[int]):
-        self.name = var.varname if isinstance(var, Variable) else var
+        self.varname = var.varname if isinstance(var, Variable) else var
         self.version = version if version is not None else -1
 
     def __str__(self):
-        return f"{self.name}#{self.version}"
+        return f"{self.varname}#{self.version}"
 
     @property
     def base_name(self) -> str:
-        return self.name
+        return self.varname
 
 
 class SSAEdge:
@@ -41,12 +41,22 @@ class SSAEdge:
         self.var = var
 
         # REGULAR / PHI_ARG / LOOP_CARRIED
+
+        # Regular Edge: The most common def-use chain. It represents the conventional
+        #   definition and usage relationship of variables whin a basic block or across basic blocks.
+
+        # Phi Arg Edge: connecting the definition of phi arguments with phi function.
+
+        # Loop Carried Edge: It represents the data dependency relationship between loop iterations.
+        #   Definition points and usage points in different loop iterations. The source_inst defines the
+        #   value in the current iteration of the loop. The value is used in the next iteration of the
+        #   loop by target_inst. And usually related to the phi function.
         self.type = "REGULAR"
         self.loop_carried = False
 
     @property
     def id(self) -> Tuple[MIRInstId, MIRInstId]:
-        return self.source_inst.id, self.target_inst.id
+        return self.source_inst.unique_id, self.target_inst.unique_id
 
     def mark_loop_carried(self):
         self.type = "LOOP_CARRIED"

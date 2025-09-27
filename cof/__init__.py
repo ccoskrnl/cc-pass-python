@@ -45,6 +45,7 @@ class CodeOptimizer:
     def process_local_functions(self):
 
         for func in self.func_list:
+            print(f"Processing {func.func_name}")
             cfg = ControlFlowGraph(func.insts)
             self.func_cfg[func] = cfg
             lco = LocalCodeOptimizer(
@@ -55,6 +56,5 @@ class CodeOptimizer:
             )
             lco.initialize()
             lco.optimize()
-
-        self.insts.assign_addr()
+            self.insts.assign_addr()
 

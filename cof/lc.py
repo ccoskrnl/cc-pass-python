@@ -6,7 +6,9 @@ from cof.base.cfg import ControlFlowGraph
 from cof.base.ssa import SSAEdgeBuilder
 from cof.early import EarlyOptimizer
 from cof.early.const_folding import constant_folding
+from utils.cfg_visualizer import visualize_cfg
 
+second = False
 
 class LocalCodeOptimizer:
     def __init__(
@@ -38,6 +40,23 @@ class LocalCodeOptimizer:
 
     def optimize(self):
 
+        # +++++++++++++++++++++ SSA Computing +++++++++++++++++++++
+        self.cfg.minimal_ssa()
+        self.ssa_edge_builder = self.cfg.ssa_edges_comp(self.loop_analyzer)
+        print(self.cfg.insts)
+
+        # global second
+        # if second:
+        #     visualize_cfg(self.cfg)
+        # if not second:
+        #     second = True
+
+        if self.sccp_enable:
+            # +++++++++++++++++++++ SCCP Analysis +++++++++++++++++++++
+            sccp_analyzer: SCCPAnalyzer = sccp_analysis(self.cfg, self.ssa_edge_builder)
+            constant_folding(sccp_analyzer)
+
+
         match self.pre_algorithm:
             case 'lcm':
                 early_optimizer = EarlyOptimizer(self.cfg)
@@ -48,15 +67,6 @@ class LocalCodeOptimizer:
             case 'dae':
                 pass
 
-        # +++++++++++++++++++++ SSA Computing +++++++++++++++++++++
-        self.cfg.minimal_ssa()
-        self.ssa_edge_builder = self.cfg.ssa_edges_comp(self.loop_analyzer)
-
-
-        if self.sccp_enable:
-            # +++++++++++++++++++++ SCCP Analysis +++++++++++++++++++++
-            sccp_analyzer: SCCPAnalyzer = sccp_analysis(self.cfg, self.ssa_edge_builder)
-            constant_folding(sccp_analyzer)
-
+        print(self.cfg.insts)
 
         pass
