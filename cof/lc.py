@@ -8,8 +8,6 @@ from cof.early import EarlyOptimizer
 from cof.early.const_folding import constant_folding
 from utils.cfg_visualizer import visualize_cfg
 
-second = False
-
 class LocalCodeOptimizer:
     def __init__(
             self,
@@ -43,13 +41,8 @@ class LocalCodeOptimizer:
         # +++++++++++++++++++++ SSA Computing +++++++++++++++++++++
         self.cfg.minimal_ssa()
         self.ssa_edge_builder = self.cfg.ssa_edges_comp(self.loop_analyzer)
+        print("SSA From: ")
         print(self.cfg.insts)
-
-        # global second
-        # if second:
-        #     visualize_cfg(self.cfg)
-        # if not second:
-        #     second = True
 
         if self.sccp_enable:
             # +++++++++++++++++++++ SCCP Analysis +++++++++++++++++++++

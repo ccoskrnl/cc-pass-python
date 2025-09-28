@@ -1,5 +1,5 @@
 from collections import defaultdict
-from typing import Dict, Tuple, Union, Optional, List
+from typing import Dict, Tuple, List
 
 from cof.base.mir.args import Args
 from cof.base.mir.inst import MIRInst, MIRInstId
@@ -8,12 +8,15 @@ from cof.base.mir.operator import Op
 from cof.base.mir.variable import Variable
 
 
-class SSAVariable:
-    __slots__ = ('varname','version')
+class SSAVariable(Variable):
+    __slots__ = ('version', 'original_variable')
 
-    def __init__(self, var: Union[str, Variable], version: Optional[int]):
-        self.varname = var.varname if isinstance(var, Variable) else var
-        self.version = version if version is not None else -1
+    def __init__(self, var: Variable, version: int = -1):
+        # 调用父类初始化
+        super().__init__(var.varname)
+        # self.varname = var.varname if isinstance(var, Variable) else var
+        self.version = version
+        self.original_variable: Variable = var
 
     def __str__(self):
         return f"{self.varname}#{self.version}"
@@ -21,6 +24,11 @@ class SSAVariable:
     @property
     def base_name(self) -> str:
         return self.varname
+
+    def __hash__(self):
+        return hash((self.original_variable, self.version))
+    def __eq__(self, other : 'SSAVariable'):
+        return self.original_variable == other.original_variable and self.version == other.version
 
 
 class SSAEdge:
@@ -90,24 +98,24 @@ class SSAEdgeBuilder:
         return edges
 
 
-def create_phi_function(varname: str, num_pred_s: int) -> MIRInst:
+def create_phi_function(var: Variable, num_pred_s: int) -> MIRInst:
     args: List[Operand] = []
     for i in range(0, num_pred_s):
-        args.append(Operand(OperandType.SSA_VAR, SSAVariable(varname, None)))
+        args.append(Operand(OperandType.SSA_VAR, SSAVariable(var)))
 
     return MIRInst(
         offset=-1,
         op=Op.PHI,
         operand1=Operand(OperandType.VAR, Variable("φ")),
         operand2=Operand(OperandType.ARGS, Args(args)),
-        result=Operand(OperandType.SSA_VAR, SSAVariable(varname, None)),
+        result=Operand(OperandType.SSA_VAR, SSAVariable(var)),
     )
 
 
-def has_phi_for_var(block, varname) -> bool:
+def has_phi_for_var(block, var: Variable) -> bool:
     # iterate all insts
     for phi_inst in block.insts.ret_phi_insts():
         result: SSAVariable = phi_inst.result.value
-        if result.base_name == varname:
+        if result.original_variable == var:
             return True
     return False

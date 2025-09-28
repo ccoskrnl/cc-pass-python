@@ -10,8 +10,8 @@ from utils.cfg_visualizer import visualize_cfg
 
 
 def testing() -> Tuple[MIRInsts, List[MIRFunction]]:
-    p = Parser("ir_examples/example1.ir")
-    # p = Parser("ir_examples/sccp_example.ir")
+    # p = Parser("ir_examples/example1.ir")
+    p = Parser("ir_examples/sccp_example.ir")
     p.parse()
     p.insts.assign_addr()
     return p.insts, p.func_list
@@ -33,7 +33,7 @@ if __name__ == "__main__":
     global_insts, func_list = testing()
 
     print(global_insts)
-    opter = CodeOptimizer(global_insts, func_list, sccp_enable=True, pre_algorithm='lcm', ssa_period='always')
+    opter = CodeOptimizer(global_insts, func_list, sccp_enable=True, pre_algorithm='', ssa_period='always')
     opter.optimize()
     print(global_insts)
 

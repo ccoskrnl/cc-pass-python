@@ -584,12 +584,12 @@ class ControlFlowGraph(ControlFlowGraphForDataFlowAnalysis):
                 self.dfp = d
                 change = True
 
-    def _rename_variables(self, def_sites: Dict[str, List], variables: set[str]) -> None:
+    def _rename_variables(self, def_sites: Dict[Variable, List], variables: set[Variable]) -> None:
 
         # initialize version counters
-        counters: Dict[str, int] = {v: 0 for v in def_sites.keys()}
+        counters: Dict[Variable, int] = {v: 0 for v in def_sites.keys()}
         # initialize current version stacks
-        stacks = defaultdict(list)
+        stacks: Dict[Variable, List[int]] = defaultdict(list)
         # record version at the exit of each block { block: { var: version } }
         block_versions: Dict[int, dict] = defaultdict(dict)
         # temporary storage phi operands { block: { var: [operands] }
@@ -607,21 +607,21 @@ class ControlFlowGraph(ControlFlowGraphForDataFlowAnalysis):
         def rename_use_operand(operand: Operand):
             if operand:
                 if operand.type == OperandType.VAR:
-                    if operand.value.varname in stacks:
+                    if operand.value in stacks:
                         operand.type = OperandType.SSA_VAR
-                        operand.value = SSAVariable(operand.value, stacks[operand.value.varname][-1])
+                        operand.value = SSAVariable(operand.value, stacks[operand.value][-1])
 
                 elif operand.type == OperandType.ARGS:
                     for arg in operand.value.args:
                         # if arg.type == OperandType.VAR:
                         if isinstance(arg.value, Variable):
-                            if arg.value.varname in stacks:
+                            if arg.value in stacks:
                                 arg.type = OperandType.SSA_VAR
-                                arg.value = SSAVariable(arg.value, stacks[arg.value.varname][-1])
-
+                                arg.value = SSAVariable(arg.value, stacks[arg.value][-1])
 
             else:
                 pass
+
 
         # depth first search
         def dfs(block_para: BasicBlock):
@@ -636,20 +636,18 @@ class ControlFlowGraph(ControlFlowGraphForDataFlowAnalysis):
             # 1
             # handle all phi insts in current block at first
             # allocate new version for phi result.
-            phi_def_list: List[str] = []
+            phi_def_list: List[Variable] = []
             for phi_inst_in_cbb in block_para.insts.ret_phi_insts():
                 assert isinstance(phi_inst_in_cbb.result.value, SSAVariable)
-                v: SSAVariable = phi_inst_in_cbb.result.value
-                # original variable name
-                v_n = v.base_name
+                ssa_var: SSAVariable = phi_inst_in_cbb.result.value
 
                 # construct new varname and assign to phi result
-                counters[v_n] += 1
-                v.version = counters[v_n]
+                counters[ssa_var.original_variable] += 1
+                ssa_var.version = counters[ssa_var.original_variable]
 
                 # add new version into stack
-                stacks[v_n].append(counters[v_n])
-                phi_def_list.append(v_n)
+                stacks[ssa_var.original_variable].append(counters[ssa_var.original_variable])
+                phi_def_list.append(ssa_var.original_variable)
 
             # 2
             # rename ordinary instructions
@@ -661,14 +659,14 @@ class ControlFlowGraph(ControlFlowGraphForDataFlowAnalysis):
                 # rename (def)
                 if inst_in_cbb.is_assignment():
                     v: Variable = inst_in_cbb.ret_dest_variable().value
-                    counters[v.varname] += 1
-                    new_ver = counters[v.varname]
+                    counters[v] += 1
+                    new_ver = counters[v]
                     new_var = SSAVariable(v, new_ver)
 
                     inst_in_cbb.result.type = OperandType.SSA_VAR
                     inst_in_cbb.result.value = new_var
 
-                    stacks[v.varname].append(new_ver)
+                    stacks[v].append(new_ver)
 
             # 3
             # record variable version at the exit of the current block
@@ -688,14 +686,14 @@ class ControlFlowGraph(ControlFlowGraphForDataFlowAnalysis):
 
                 for phi_inst_in_cbb in succ_bb.insts.ret_phi_insts():
                     result: SSAVariable = phi_inst_in_cbb.result.value
-                    varname = result.base_name
+                    common_var = result.original_variable
 
-                    if varname not in phi_operands[succ]:
-                        phi_operands[succ][varname] = [-1] * len(self.pred[succ])  # default version
+                    if common_var not in phi_operands[succ]:
+                        phi_operands[succ][common_var] = [-1] * len(self.pred[succ])  # default version
 
-                    current_ver = stacks[varname][-1] if varname in stacks and stacks[varname] else 0
+                    current_ver = stacks[common_var][-1] if common_var in stacks and stacks[common_var] else 0
                     # save operands
-                    phi_operands[succ][varname][cbb_idx_in_pred] = current_ver
+                    phi_operands[succ][common_var][cbb_idx_in_pred] = current_ver
 
             # 5
             for child_id in block_para.dominator_tree_children_id:
@@ -705,13 +703,12 @@ class ControlFlowGraph(ControlFlowGraphForDataFlowAnalysis):
             # pop up the current scope version when backtracking
             for inst_in_cbb in reversed(block_para.insts.ret_ordinary_insts()):
                 if inst_in_cbb.is_assignment():
-                    if isinstance(inst_in_cbb.result.value, Variable):
-                        result: Variable = inst_in_cbb.result.value
-                        varname = result.varname
-                        stacks[varname].pop()
-                    elif isinstance(inst_in_cbb.result.value, SSAVariable):
+                    if isinstance(inst_in_cbb.result.value, SSAVariable):
                         result: SSAVariable = inst_in_cbb.result.value
-                        stacks[result.base_name].pop()
+                        stacks[result.original_variable].pop()
+                    elif isinstance(inst_in_cbb.result.value, Variable):
+                        result: Variable = inst_in_cbb.result.value
+                        stacks[result].pop()
                     else:
                         raise TypeError("Only Variables or SSAVariables are allowed")
 
@@ -731,9 +728,9 @@ class ControlFlowGraph(ControlFlowGraphForDataFlowAnalysis):
 
             for phi in block.insts.ret_phi_insts():
                 result_var: SSAVariable = phi.result.value
-                base_varname: str = result_var.base_name
+                common_var: Variable = result_var.original_variable
 
-                if base_varname not in phi_data:
+                if common_var not in phi_data:
                     continue
 
                 phi_args: Args = phi.operand2.value
@@ -741,7 +738,7 @@ class ControlFlowGraph(ControlFlowGraphForDataFlowAnalysis):
                     # get index from dict
                     pred_index = pred_index_map[pred_id]
                     # obtain the version number of the corresponding predecessor.
-                    version = phi_data[base_varname][pred_index]
+                    version = phi_data[common_var][pred_index]
                     phi_arg_var: SSAVariable = phi_args.args[index].value
                     phi_arg_var.version = version
 
@@ -749,28 +746,28 @@ class ControlFlowGraph(ControlFlowGraphForDataFlowAnalysis):
         self._dom_front()
         self._df_plus(self.block_id_set)
 
-        variables: set[str] = set()
+        variables: set[Variable] = set()
 
         # collect all variables.
         for inst in self.insts.ir_insts:
             if inst.is_assignment():
-                variables.add(str(inst.ret_dest_variable().value))
+                variables.add(inst.ret_dest_variable().value)
 
         # record all blocks which defines variable
-        def_sites: Dict[str, List] = {v: [] for v in variables}
+        def_sites: Dict[Variable, List] = {v: [] for v in variables}
         for block in self.block_by_id.values():
             for inst in block.insts.ret_insts():
                 if inst.is_assignment():
                     variable: Variable = inst.ret_dest_variable().value
-                    def_sites[str(variable)].append(block.id)
+                    def_sites[variable].append(block.id)
 
         # insert phi function for each variable
-        for varname in variables:
+        for var in variables:
             # initialize worklist and even_on_worklist
 
             # the sequence stores blocks that need be handled
-            worklist = deque(def_sites[varname])
-            even_on_worklist = set(def_sites[varname])
+            worklist = deque(def_sites[var])
+            even_on_worklist = set(def_sites[var])
 
             # if the variable only be defined once, then we're done.
             if len(even_on_worklist) == 1:
@@ -785,10 +782,10 @@ class ControlFlowGraph(ControlFlowGraphForDataFlowAnalysis):
                 for y in self.df[def_block_id]:
                     y_block = self.block_by_id[y]
                     # check if y has phi function of v
-                    if not has_phi_for_var(y_block, varname):
+                    if not has_phi_for_var(y_block, var):
 
                         # insert phi function as the first inst in y
-                        new_phi = create_phi_function(varname, num_pred_s=len(self.pred[y]))
+                        new_phi = create_phi_function(var, num_pred_s=len(self.pred[y]))
                         insert_index = self.insts.index_for_inst(y_block.first_ordinary_inst)
                         # add phi inst into cfg insts
                         self.add_new_inst(insert_index, new_phi)

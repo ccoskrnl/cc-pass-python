@@ -1,4 +1,4 @@
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Set
 
 from tabulate import tabulate
 
@@ -52,7 +52,7 @@ class DataFlowAnalyzer:
 
 
 
-    def live_vars(self):
+    def live_vars(self) -> Dict[BasicBlock, Set[Variable]]:
         use_dict, def_dict = self.cfg.collect_use_def()
         all_vars: set[Variable] = set()
         for use_var in use_dict.values():
@@ -80,6 +80,8 @@ class DataFlowAnalyzer:
             info += f"Block {b.id}: {{ {", ".join(map(str, t))} }}\n"
 
         print(info)
+
+        return analysis.result
 
 
     def anticipated_exprs(self) -> Dict[BasicBlock, set[Expression]]:

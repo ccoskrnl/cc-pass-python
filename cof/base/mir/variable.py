@@ -1,4 +1,5 @@
 from enum import Enum, auto
+from tkinter import Variable
 
 
 class VariableScope(Enum):
@@ -27,7 +28,7 @@ class Variable:
         return self.varname
     def __hash__(self):
         return hash((self.varname, self.scope, self.compiler_generated))
-    def __eq__(self, other):
+    def __eq__(self, other : 'Variable'):
         return self.varname == other.varname \
                 and self.scope == other.scope \
                 and self.compiler_generated == other.compiler_generated
