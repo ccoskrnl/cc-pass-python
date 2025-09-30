@@ -63,7 +63,7 @@ class AnticipatedTransfer(TransferCluster[BasicBlock, Set[Expression]]):
             # Find all variables modified in this block.
             modified_vars = set()
             for inst in block.insts.ret_insts():
-                assigned_var = inst.ret_assigned_var()
+                assigned_var = inst.ret_def_var()
                 if assigned_var is not None:
                     modified_vars.add(assigned_var)
 

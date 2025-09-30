@@ -1,6 +1,7 @@
 from enum import Enum, auto
-from tkinter import Variable
 
+LCM_TMP_VAR_PREFIX = "lcm_tv"
+PHI_TMP_VAR_PREFIX = "phi_tv"
 
 class VariableScope(Enum):
     Global = auto()

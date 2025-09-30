@@ -661,7 +661,7 @@ class ControlFlowGraph(ControlFlowGraphForDataFlowAnalysis):
                     v: Variable = inst_in_cbb.ret_dest_variable().value
                     counters[v] += 1
                     new_ver = counters[v]
-                    new_var = SSAVariable(v, new_ver)
+                    new_var = SSAVariable(v, new_ver, block_id=block_para.id)
 
                     inst_in_cbb.result.type = OperandType.SSA_VAR
                     inst_in_cbb.result.value = new_var
@@ -685,15 +685,16 @@ class ControlFlowGraph(ControlFlowGraphForDataFlowAnalysis):
                     phi_operands[succ] = {}
 
                 for phi_inst_in_cbb in succ_bb.insts.ret_phi_insts():
-                    result: SSAVariable = phi_inst_in_cbb.result.value
-                    common_var = result.original_variable
 
-                    if common_var not in phi_operands[succ]:
-                        phi_operands[succ][common_var] = [-1] * len(self.pred[succ])  # default version
+                    result: Variable = phi_inst_in_cbb.result.value.original_variable
 
-                    current_ver = stacks[common_var][-1] if common_var in stacks and stacks[common_var] else 0
+                    if result not in phi_operands[succ]:
+                        phi_operands[succ][result] = [-1] * len(self.pred[succ])  # default version
+
+                    # get the last version of the variable in version stack.
+                    current_ver = stacks[result][-1] if result in stacks and stacks[result] else 0
                     # save operands
-                    phi_operands[succ][common_var][cbb_idx_in_pred] = current_ver
+                    phi_operands[succ][result][cbb_idx_in_pred] = current_ver
 
             # 5
             for child_id in block_para.dominator_tree_children_id:
@@ -741,6 +742,7 @@ class ControlFlowGraph(ControlFlowGraphForDataFlowAnalysis):
                     version = phi_data[common_var][pred_index]
                     phi_arg_var: SSAVariable = phi_args.args[index].value
                     phi_arg_var.version = version
+                    phi_arg_var.block_id = pred_id
 
     def minimal_ssa(self):
         self._dom_front()
@@ -913,9 +915,9 @@ class ControlFlowGraph(ControlFlowGraphForDataFlowAnalysis):
         self.block_id_set.add(bb_id)
         self.n_bbs += 1
 
-        for instr in block_insts:
-            if instr.op == Op.EXIT:
-                self.exit = src_vertex
+        # for instr in block_insts:
+        #     if instr.op == Op.EXIT:
+        #         self.exit = src_vertex
 
         return src_vertex
 

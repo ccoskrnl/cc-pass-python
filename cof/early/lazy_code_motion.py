@@ -8,7 +8,7 @@ from cof.base.cfg import ControlFlowGraph
 from cof.base.mir.expr import Expression, has_expr, convert_bin_expr_to_operand, ret_expr_from_mir_inst
 from cof.base.mir.inst import MIRInst
 from cof.base.mir.operand import OperandType, Operand
-from cof.base.mir.variable import Variable
+from cof.base.mir.variable import Variable, LCM_TMP_VAR_PREFIX
 from cof.base.semilattice import Semilattice
 
 
@@ -151,7 +151,7 @@ def _comp_e_kill_sets(
         # Find all variables modified in this block.
         modified_vars = set()
         for inst in block.insts.ret_insts():
-            assigned_var = inst.ret_assigned_var()
+            assigned_var = inst.ret_def_var()
             if assigned_var is not None:
                 modified_vars.add(assigned_var)
 
@@ -358,7 +358,7 @@ def lazy_code_motion_optimize(cfg: ControlFlowGraph):
     temp_vars = { }
     for i, expr in enumerate(all_exprs):
         # Generate unique temp var names
-        temp_vars[expr] = f"lcm_tv_{i}"
+        temp_vars[expr] = f"{LCM_TMP_VAR_PREFIX}_{i}"
 
     # First pass:
     #

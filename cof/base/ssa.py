@@ -1,6 +1,7 @@
 from collections import defaultdict
 from typing import Dict, Tuple, List
 
+from cof.base.bb import BasicBlockId
 from cof.base.mir.args import Args
 from cof.base.mir.inst import MIRInst, MIRInstId
 from cof.base.mir.operand import Operand, OperandType
@@ -9,14 +10,15 @@ from cof.base.mir.variable import Variable
 
 
 class SSAVariable(Variable):
-    __slots__ = ('version', 'original_variable')
+    __slots__ = ('version', 'original_variable', 'block_id')
 
-    def __init__(self, var: Variable, version: int = -1):
+    def __init__(self, var: Variable, version: int = -1, block_id : int = -1):
         # 调用父类初始化
         super().__init__(var.varname)
         # self.varname = var.varname if isinstance(var, Variable) else var
-        self.version = version
+        self.version : int= version
         self.original_variable: Variable = var
+        self.block_id : BasicBlockId = -1
 
     def __str__(self):
         return f"{self.varname}#{self.version}"
@@ -30,6 +32,8 @@ class SSAVariable(Variable):
     def __eq__(self, other : 'SSAVariable'):
         return self.original_variable == other.original_variable and self.version == other.version
 
+    def __copy__(self):
+        return SSAVariable(self.original_variable, self.version, self.block_id)
 
 class SSAEdge:
     """

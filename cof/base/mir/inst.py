@@ -3,8 +3,7 @@ from typing import Optional, List, Callable, Any, Union, Dict
 from cof.base.mir.operand import Operand, OperandType, Const_Operand_Type
 from cof.base.mir.operator import Op, op_str, Evaluatable_Op, Arithmetic_Op, Assignment_Op, Expression_Op
 from cof.base.mir.variable import Variable
-
-
+from cof.base.ssa import SSAVariable
 
 # ++++++++++++++++++++++++ MIR ++++++++++++++++++++
 
@@ -46,7 +45,7 @@ class MIRInst:
         self.addr: MIRInstAddr = 0
         self.offset: MIRInstAddr = offset
         self.op = op
-        self.operand1: Operand = operand1
+        self.operand1: Optional[Operand] = operand1
         self.operand2: Optional[Operand] = operand2
         self.result: Optional[Operand] = result
     def __hash__(self):
@@ -122,6 +121,8 @@ class MIRInst:
         return True if self.op in Arithmetic_Op else False
     def is_assignment(self) -> bool:
         return True if self.op in Assignment_Op else False
+    def is_copy(self) -> bool:
+        return True if self.op == Op.ASSIGN and self.operand2 is None else False
     def is_exp(self) -> bool:
         return True if self.op in Expression_Op else False
     def is_if(self) -> bool:
@@ -155,14 +156,22 @@ class MIRInst:
             return self.operand1
         return None
 
-    def ret_assigned_var(self) -> Optional[Variable]:
+    def ret_def_var(self) -> Optional[Variable]:
         """
-        Retrieve the assigned variable of the assignment instruction.
+        Retrieve the defined variable of the assignment instruction.
         """
         if self.is_assignment():
             assert self.result
             return self.result.value
         return None
+
+    def ret_use_var(self) -> List[Variable]:
+        var_list : List[Variable] = []
+        operand_list = self.ret_operand_list()
+        for operand in operand_list:
+            if operand.is_var():
+                var_list.append(operand.value)
+        return var_list
 
     def ret_a_operand_list_for_evaluatable_exp_inst(self) -> List[Operand]:
         """
@@ -207,7 +216,7 @@ class MIRInst:
 
         return l
 
-    def all_constant_operands(self):
+    def all_constant_operands(self) -> bool:
         """
         check if all operands is constant, otherwise return false.
         """
@@ -216,6 +225,14 @@ class MIRInst:
                 return False
         return True
 
+    def ret_var_by_pred_id_for_phi(self, pred_id) -> Optional[Variable]:
+        operand_list: List[Operand] = self.ret_operand_list()
+        for operand in operand_list:
+            assert operand.type == OperandType.SSA_VAR
+            ssa_var: SSAVariable = operand.value
+            if ssa_var.block_id == pred_id:
+                return ssa_var.original_variable
+        return None
 
     def convert_if_to_goto(self):
         assert self.is_if()
