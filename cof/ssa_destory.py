@@ -2,7 +2,7 @@ from collections import defaultdict
 from typing import Dict, Set, List, Tuple
 
 from cof.analysis.dataflow import DataFlowAnalyzer
-from cof.base.bb import BasicBlock, BasicBlockId
+from cof.base.bb import BasicBlock, BasicBlockId, BasicBlockBranchType
 from cof.base.cfg import ControlFlowGraphForDataFlowAnalysis, ControlFlowGraph
 from cof.base.mir.inst import MIRInst
 from cof.base.mir.operand import Operand, OperandType
@@ -48,17 +48,21 @@ class InterferenceGraph:
             if node in self.adjacency:
                 del self.adjacency[node]
 
-class CriticalEdgeSpliter:
+
+class CriticalEdgeSplitter:
     def __init__(self, cfg: ControlFlowGraph):
         self.cfg = cfg
-        self.split_edges = [ ]
-        self.new_blocks = [ ]
+        self.split_edges: List[Tuple[Tuple[BasicBlockId, BasicBlockId], Tuple[BasicBlockId, BasicBlockId]]] = []
+        self.new_blocks: List[BasicBlock] = []
 
     def split_critical_edges(self):
         critical_edges = self.identify_critical_edges()
 
+        for edge in critical_edges:
+            self.split_single_edge(edge[0], edge[1])
+
     def identify_critical_edges(self) -> List[Tuple[BasicBlock, BasicBlock]]:
-        critical_edges : List[Tuple[BasicBlock, BasicBlock]] = []
+        critical_edges: List[Tuple[BasicBlock, BasicBlock]] = []
 
         for block in self.cfg.block_by_id.values():
             for successor in self.cfg.successors(block.id):
@@ -67,20 +71,17 @@ class CriticalEdgeSpliter:
 
         return critical_edges
 
-    def is_critical_edge(self, src_id : BasicBlockId, dst_id : BasicBlockId) -> bool:
+    def is_critical_edge(self, src_id: BasicBlockId, dst_id: BasicBlockId) -> bool:
         # 1. src block has multiple successors.
         # 2. dst block has multiple predecessors.
         return len(self.cfg.successors(src_id)) > 1 and len(self.cfg.predecessors(dst_id)) > 1
 
-
-    def split_single_edge(self, src : BasicBlock, dst : BasicBlock) -> BasicBlock:
+    def split_single_edge(self, src: BasicBlock, dst: BasicBlock) -> BasicBlock:
         intermediate_block = self.cfg.new_a_block(self.cfg.n_bbs, [])
         self.update_cfg_connection(intermediate_block, src, dst)
         self.new_blocks.append(intermediate_block)
-        self.split_edges.append((src, dst))
 
         return intermediate_block
-
 
     def update_cfg_connection(self, intermediate_block: BasicBlock, src: BasicBlock, dst: BasicBlock):
         intermediate_block.comment = f"intermediate block from {src.id} to {dst.id}"
@@ -100,26 +101,54 @@ class CriticalEdgeSpliter:
         src.succ_bbs[intermediate_block.id] = intermediate_block
         src.succ_bbs.pop(dst.id)
 
-    def update_branch_instructions(self, intermediate_block: BasicBlock, src: BasicBlock, dst: BasicBlock):
-        #
-        # # insert phi function as the first inst in y
-        # new_phi = create_phi_function(var, num_pred_s=len(self.pred[y]))
-        # insert_index = self.insts.index_for_inst(y_block.first_ordinary_inst)
-        # # add phi inst into cfg insts
-        # self.add_new_inst(insert_index, new_phi)
-        # # add phi inst into block insts
-        # y_block.insts.add_phi_inst(new_phi)
-        #
+        self.split_edges.append(((src.id, intermediate_block.id), (intermediate_block.id, dst.id)))
 
-        # assignment_inst = MIRInst(0, Op.ASSIGN, )
+        # Create goto inst
+        first_ordinary_inst = dst.first_ordinary_inst
+        goto_inst = MIRInst(
+            offset=0,
+            op=Op.GOTO,
+            result=first_ordinary_inst.unique_id,
+            operand1=None,
+            operand2=None,
+        )
+        intermediate_block.insts.insert_insts(goto_inst, -1)
 
-        pass
+        if src.branch_type == BasicBlockBranchType.cond:
+
+            cond_branch = src.insts.ret_inst_by_idx(-1)
+
+            if dst.id == src.ordered_succ_bbs[0]:
+                # True branch
+                insert_index = self.cfg.insts.index_for_inst(dst.first_ordinary_inst)
+
+                # insert the goto inst before the dst's first ordinary inst in the cfg inst sequence.
+                self.cfg.add_new_inst(insert_index, goto_inst)
+
+                # update true branch target
+                cond_branch.result.value = goto_inst.unique_id
+
+            elif dst.id == src.ordered_succ_bbs[1]:
+                # False branch
+                insert_index = self.cfg.insts.index_for_inst(cond_branch)
+
+                # insert the goto inst after the src conditional branch instruction in the cfg inst sequence.
+                self.cfg.add_new_inst(insert_index + 1, goto_inst)
+
+            else:
+                assert False
+        elif src.branch_type == BasicBlockBranchType.switch:
+            pass
+
+        else:
+            assert False
 
 
-def compute_live_range(cfg: ControlFlowGraphForDataFlowAnalysis,) -> Dict[Variable, Set[BasicBlock]]:
+
+def compute_live_range(cfg: ControlFlowGraphForDataFlowAnalysis, ) -> Dict[Variable, Set[BasicBlock]]:
     data_flow_analyzer = DataFlowAnalyzer(cfg=cfg)
     liveness_analysis_result = data_flow_analyzer.live_vars()
-    live_ranges : Dict[Variable, Set[BasicBlock]] = { }
+    live_ranges: Dict[Variable, Set[BasicBlock]] = {}
     for block in cfg.all_blocks():
         for var in liveness_analysis_result[block]:
             if var not in live_ranges:
@@ -127,6 +156,7 @@ def compute_live_range(cfg: ControlFlowGraphForDataFlowAnalysis,) -> Dict[Variab
             live_ranges[var].add(block)
 
     return live_ranges
+
 
 def build_interference_graph(
         cfg: ControlFlowGraph,
@@ -162,10 +192,9 @@ def build_interference_graph(
     return interference_graph
 
 
-def eliminate_phi_functions(cfg: ControlFlowGraph,) -> Dict[SSAVariable, SSAVariable]:
-
-    phi_replacements = { }
-    critical_edge_spliter = CriticalEdgeSpliter(cfg=cfg)
+def eliminate_phi_functions(cfg: ControlFlowGraph, ) -> Dict[SSAVariable, SSAVariable]:
+    phi_replacements = {}
+    critical_edge_splitter = CriticalEdgeSplitter(cfg=cfg)
 
     def process_phi_function(phi_para: MIRInst):
         nonlocal phi_replacements
@@ -180,10 +209,10 @@ def eliminate_phi_functions(cfg: ControlFlowGraph,) -> Dict[SSAVariable, SSAVari
         for phi_instr in basic_block.insts.ret_phi_insts():
             process_phi_function(phi_instr)
             for predecessor in cfg.predecessors(basic_block.id):
-                if critical_edge_spliter.is_critical_edge(predecessor.id, basic_block.id):
+                if critical_edge_splitter.is_critical_edge(predecessor.id, basic_block.id):
 
                     # Create an intermediate block
-                    intermediate_block = critical_edge_spliter.split_single_edge(predecessor, basic_block)
+                    intermediate_block = critical_edge_splitter.split_single_edge(predecessor, basic_block)
                     original_var = phi_instr.ret_var_by_pred_id_for_phi(predecessor.id)
                     assert original_var is not None
 
@@ -227,9 +256,7 @@ def eliminate_phi_functions(cfg: ControlFlowGraph,) -> Dict[SSAVariable, SSAVari
                     # goto_inst = MIRInst(
                     #     offset=0,
                     #     op=Op.GOTO,
-                        # result=basic_block.insts.ret,
+                    # result=basic_block.insts.ret,
                     # )
 
-
-
-    return { }
+    return {}
