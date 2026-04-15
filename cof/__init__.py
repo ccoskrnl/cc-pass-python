@@ -1,6 +1,6 @@
 from typing import List, Dict
 
-from cof.analysis.sccp import sccp_analysis
+# from cof.analysis.sccp import sccp_analysis
 from cof.base.cfg import ControlFlowGraph
 from cof.base.mir.function import MIRFunction
 from cof.base.mir.inst import MIRInsts

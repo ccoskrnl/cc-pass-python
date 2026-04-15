@@ -1,3 +1,4 @@
+$function foo ( )
 	%entry
 	i := m - 1
 	j := n
@@ -11,3 +12,5 @@ L2:
 	i := u3
 	%if i %goto &L1
 	%exit
+
+$end function

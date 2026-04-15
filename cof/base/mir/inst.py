@@ -3,12 +3,13 @@ from typing import Optional, List, Callable, Any, Union, Dict
 from cof.base.mir.operand import Operand, OperandType, Const_Operand_Type
 from cof.base.mir.operator import Op, op_str, Evaluatable_Op, Arithmetic_Op, Assignment_Op, Expression_Op
 from cof.base.mir.variable import Variable
-from cof.base.ssa import SSAVariable
-
-# ++++++++++++++++++++++++ MIR ++++++++++++++++++++
+# from cof.base.ssa import SSAVariable
 
 type MIRInstId = int
 type MIRInstAddr = int
+
+# ++++++++++++++++++++++++ MIR ++++++++++++++++++++
+
 
 mir_inst_id = 0
 def new_id() -> MIRInstId:
@@ -225,14 +226,14 @@ class MIRInst:
                 return False
         return True
 
-    def ret_var_by_pred_id_for_phi(self, pred_id) -> Optional[Variable]:
-        operand_list: List[Operand] = self.ret_operand_list()
-        for operand in operand_list:
-            assert operand.type == OperandType.SSA_VAR
-            ssa_var: SSAVariable = operand.value
-            if ssa_var.block_id == pred_id:
-                return ssa_var.original_variable
-        return None
+    # def ret_var_by_pred_id_for_phi(self, pred_id) -> Optional[Variable]:
+    #     operand_list: List[Operand] = self.ret_operand_list()
+    #     for operand in operand_list:
+    #         assert operand.type == OperandType.SSA_VAR
+    #         ssa_var: SSAVariable = operand.value
+    #         if ssa_var.block_id == pred_id:
+    #             return ssa_var.original_variable
+    #     return None
 
     def convert_if_to_goto(self):
         assert self.is_if()

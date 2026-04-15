@@ -3,6 +3,7 @@ from typing import List, Optional, Dict
 
 from cof.base.mir.inst import MIRInst, MIRInsts
 
+# from cof.base.const_typedef import BasicBlockId
 type BasicBlockId = int
 
 class EdgeType(Enum):
