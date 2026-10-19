@@ -201,7 +201,7 @@ class ReachingDefsTransfer(TransferCluster):
             self.block_kill_gen[block] = (killed_vars, gen_sets)
 
     def apply(self, block: B, input_val: T) -> T:
-        """
+        r"""
         Applies the transfer function to the input lattice state for a specific block.
 
         The operation follows the standard data-flow equation:
