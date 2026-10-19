@@ -7,6 +7,7 @@
 
 - [介绍](#介绍)
 - [特性](#特性)
+- [开发环境](#开发环境)
 - [使用](#使用)
 - [路标](#路标)
 - [联系](#联系)
@@ -120,6 +121,31 @@ class DataFlowAnalysisFramework(Generic[T, B]):
 
 稀疏条件的常量传播（Sparse Conditional Constant Propagation，SCCP）是普通常量传播的增强版，结合了**常量传播**与**条件分支分析**，能更精确地处理控制流和稀疏数据流。框架首先通过迭代必经边界方法将流图转换为最小的SSA形式，并对基本块进行扁平化（或原子化），并使用流图的边和SSA边来传递信息实现程序的符号执行。
 
+
+## 开发环境
+
+本项目使用 [uv](https://docs.astral.sh/uv/) 管理依赖与虚拟环境（早期的 Poetry 配置已移除）。Python 版本由 `.python-version` 指定，依赖清单在 `pyproject.toml`，锁定结果在 `uv.lock`。
+
+```commandline
+# 安装 uv（若尚未安装）
+$ pip install uv
+
+# 按 pyproject.toml / uv.lock 创建 .venv 并安装依赖
+$ uv sync
+
+# 运行项目（uv run 会自动使用 .venv，无需手动激活）
+$ uv run python cc-pass.py --help
+```
+
+如需在别的机器上复用完全相同的依赖版本，请一并提交 `uv.lock`；修改依赖后重新执行 `uv lock` 或直接 `uv add <包名>`。
+
+若网络访问 PyPI 不畅，可以指定镜像或代理后重试：
+
+```commandline
+$ $env:UV_DEFAULT_INDEX = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple"
+$ $env:HTTPS_PROXY = "http://127.0.0.1:7897"
+$ uv sync
+```
 
 ## 使用
 ```commandline
